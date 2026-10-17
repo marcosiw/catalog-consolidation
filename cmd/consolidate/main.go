@@ -70,9 +70,9 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) (code int
 		fmt.Fprintln(stderr, err)
 		return exitUsage
 	}
-	data, err := os.ReadFile(cfg.input)
-	if err != nil {
-		fmt.Fprintf(stderr, "read input: %v\n", err)
+	// The input is streamed by the importer; only check here that it exists.
+	if _, err := os.Stat(cfg.input); err != nil {
+		fmt.Fprintf(stderr, "input: %v\n", err)
 		return exitUsage
 	}
 
@@ -83,7 +83,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) (code int
 	}
 	defer s.Close()
 
-	ingestion, err := ingest.New(s, ingest.Config{
+	importer, err := ingest.New(s, ingest.Config{
 		SimilarityThreshold: cfg.threshold,
 		BatchSize:           cfg.batchSize,
 		DryRun:              cfg.dryRun,
@@ -95,10 +95,17 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) (code int
 		return exitUsage
 	}
 
-	rep, runErr := ingestion.Run(ctx, cfg.input, data)
+	rep, runErr := importer.Run(ctx, ingest.File(cfg.input))
+	if rep.RunID == 0 {
+		// The file was refused before the run started (e.g. malformed JSON):
+		// nothing was written, so there is nothing to report.
+		fmt.Fprintf(stderr, "import failed: %v\n", runErr)
+		return exitFailed
+	}
 	// The report is written even when the run failed: it shows what the
 	// committed batches did.
 	rep.WriteSummary(stdout)
+
 	path, err := rep.WriteFile(cfg.reportDir)
 	if err != nil {
 		fmt.Fprintln(stderr, err)

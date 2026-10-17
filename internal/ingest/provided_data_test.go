@@ -17,7 +17,8 @@ import (
 func TestImporter_Run_ProvidedData(t *testing.T) {
 	root := filepath.Join("..", "..")
 	db, errDB := os.ReadFile(filepath.Join(root, "data", "catalog.db"))
-	entries, errEntries := os.ReadFile(filepath.Join(root, "data", "ProductEntry.json"))
+	entries := File(filepath.Join(root, "data", "ProductEntry.json"))
+	_, errEntries := os.Stat(string(entries))
 	if errDB != nil || errEntries != nil {
 		t.Skip("real data not available; run make data")
 	}
@@ -42,7 +43,7 @@ func TestImporter_Run_ProvidedData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	first, err := im.Run(context.Background(), "ProductEntry.json", entries)
+	first, err := im.Run(context.Background(), entries)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +64,7 @@ func TestImporter_Run_ProvidedData(t *testing.T) {
 		t.Errorf("same_product_multiple_ids warnings = %d, want 11", n)
 	}
 
-	second, err := im.Run(context.Background(), "ProductEntry.json", entries)
+	second, err := im.Run(context.Background(), entries)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -90,8 +90,11 @@ The shopper must see each product **once**, with every seller's offer attached t
 7. **Similarity is token Jaccard, threshold 0.6, configurable.** Measured: the two translations score 0.67; the most similar pair of *different* same-brand products in the catalog scores 0.50 (`Tennis Racket Adult` × `Tennis Racket Bag`). Character-level similarity was rejected: `Colander Stainless Steel` × `Ladle Stainless Steel` scores 0.89 against 0.91/0.96 for the translations. Caveats: calibrated on only two positives; it does not catch typos inside a word.
 8. **The SQL injection entry is ordinary data.** Security lives in the data access layer: **every statement is parameterized**, including migrations. A test proves the brand is stored literally. Filtering characters was rejected: it would break legitimate brands (`Levi's`, `Black+Decker`, `AT&T`) and protects nothing that parameterization does not.
 9. **Execution.**
-   - Batches of 500 entries per transaction (configurable). The distinct runs on the whole file before batching. `ImportRun` is written first (`running`), counters are updated per committed batch, and it ends as `completed` or `failed`. A failed run is recovered by running the file again — safe because of idempotency and last-wins.
-   - Data errors reject the entry and the run goes on (`missing_id`, `missing_seller_name`, `missing_name` — also when the name has no letter or digit; an empty brand is allowed). System errors (malformed JSON, database unavailable, unexpected constraint violation) roll back the batch, mark the run `failed` and exit non-zero.
+   - **Batches bound the transaction, streaming bounds the memory.** These are two different limits:
+     - **Transaction:** 500 entries per transaction (configurable). SQLite has a single writer, so a long transaction would lock the database and lose everything if it failed at the end. `ImportRun` is written first (`running`), counters are updated per committed batch, and it ends as `completed` or `failed`. A failed run is recovered by running the file again — safe because of idempotency and last-wins.
+     - **Memory:** the file is never loaded whole. It is streamed **twice**, one entry at a time. The first pass computes the SHA-256 and, for each `(SellerName, Id)`, the position of its last occurrence; that is all the whole-file distinct needs. The second pass imports, and an entry whose position is not the last of its key is reported as `duplicate_in_batch`. Memory grows with the number of distinct seller items (tens of bytes each), not with the size of the entries. The cost is reading the file twice.
+     - If the file changes between the two passes (its hash differs), the run fails.
+   - Data errors reject the entry and the run goes on (`missing_id`, `missing_seller_name`, `missing_name` — also when the name has no letter or digit; an empty brand is allowed). A malformed file is refused by the first pass, **before anything is written**: no run is recorded and no report is produced. Other system errors (database unavailable, unexpected constraint violation, file changed during the import) roll back the batch, mark the run `failed` and exit non-zero.
    - Migrations are versioned with `PRAGMA user_version`, idempotent and applied automatically at start. `PRAGMA foreign_keys = ON` on every connection.
    - `--dry-run` runs everything in a single transaction that is rolled back at the end (batch size ignored) and still writes the report.
 10. **Exclusion list** (stage 0c): a file of forbidden terms that grows without code changes. If `Name` or `Brand` contains a term anywhere, the entry is rejected (`exclusion_list`, with the matched term). Comparison is case-insensitive with collapsed spaces, **keeping punctuation**. Initial terms: `Security Test Product`, `SELECT 1;`. This is **catalog content policy** (sellers pushing test items to production), not a security control. Terms must be specific: `test` alone would match `Contest`.
@@ -161,6 +164,7 @@ Exit codes: `0` the import completed; `1` the import failed (the report shows wh
 - Combined similarity metric (tokens + characters) to catch typos.
 - `Seller` table.
 - Per-line import log.
+- For files of millions of entries: write the report as a stream too (today it is kept in memory until the end), and load the file into a staging table so the distinct is done in SQL (`ROW_NUMBER() OVER (PARTITION BY SellerName, Id ...)`) and the import can resume from where it stopped.
 - Allow-list and presence rules (e.g. "category X requires brand").
 
 ## 9. Assumptions
@@ -174,7 +178,7 @@ Made where the assessment is silent. Each one is a place where a different answe
 5. **The seller id is the seller's SKU**: opaque, unique only within that seller, and the key the seller will use for later updates.
 6. **Order in the file is meaningful**: when the same `(SellerName, Id)` appears more than once, the last occurrence is the most recent message.
 7. **A re-sent id with different data is a correction** by the seller, not a new item (decision 2).
-8. **The input fits in memory.** Needed by the whole-file distinct; acceptable for the sizes of this exercise.
+8. **The index of seller items fits in memory.** The file itself is streamed (decision 9); what stays in memory is one entry per distinct `(SellerName, Id)` and the report, which keeps one line per entry.
 9. **One import runs at a time.** Concurrent runs would still not duplicate products (the `UNIQUE` on the normalized key), but their last-wins order would be undefined.
 10. **Wrongly merging is worse than duplicating** (section 1), so every doubtful case is reported, not decided.
 

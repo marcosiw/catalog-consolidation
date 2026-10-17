@@ -154,3 +154,18 @@ func TestRun_ShowsHelp(t *testing.T) {
 		t.Errorf("help does not list the flags:\n%s", stderr.String())
 	}
 }
+
+func TestRun_RefusesMalformedInputWithoutReport(t *testing.T) {
+	c := newCLI(t)
+	bad := filepath.Join(t.TempDir(), "bad.json")
+	if err := os.WriteFile(bad, []byte(`[{"Id":`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	code, _, stderr := c.run(t, "-input", bad)
+	if code != exitFailed || !strings.Contains(stderr, "import failed") {
+		t.Errorf("exit = %d, stderr = %q; want %d and an import failed message", code, stderr, exitFailed)
+	}
+	if files, _ := filepath.Glob(filepath.Join(c.reports, "*.json")); len(files) != 0 {
+		t.Errorf("reports = %v, want none: nothing was written", files)
+	}
+}

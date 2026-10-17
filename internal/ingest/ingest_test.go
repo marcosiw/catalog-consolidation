@@ -94,7 +94,7 @@ func (f *fixture) run(t *testing.T, cfg Config, entries ...in) *report.Report {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rep, err := im.Run(context.Background(), "entries.json", entriesJSON(t, entries...))
+	rep, err := im.Run(context.Background(), Bytes("entries.json", entriesJSON(t, entries...)))
 	if err != nil {
 		t.Fatalf("Run = %v", err)
 	}
@@ -434,7 +434,7 @@ func TestImporter_Run_KeepsCommittedBatchesWhenALaterBatchFails(t *testing.T) {
 		in{"a1", "S1", "Xbox Series X", "Microsoft", nil},
 		in{"a2", "S1", "Roteador WiFi 6 TP-Link", "TP-Link", nil}, // reaches translation
 	)
-	rep, err := im.Run(ctx, "entries.json", data)
+	rep, err := im.Run(ctx, Bytes("entries.json", data))
 	if err == nil {
 		t.Fatal("Run succeeded, want the cancelled batch to fail")
 	}
@@ -487,9 +487,9 @@ func TestImporter_Run_MarksRunFailedAndRepanicsOnPanic(t *testing.T) {
 				t.Error("Run did not propagate the panic")
 			}
 		}()
-		im.Run(context.Background(), "entries.json", entriesJSON(t,
+		im.Run(context.Background(), Bytes("entries.json", entriesJSON(t,
 			in{"a1", "S1", "Roteador WiFi 6 TP-Link", "TP-Link", nil}, // reaches translation
-		))
+		)))
 	}()
 	var status string
 	if err := f.db.QueryRow(`SELECT Status FROM ImportRun`).Scan(&status); err != nil {

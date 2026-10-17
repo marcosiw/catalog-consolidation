@@ -3,8 +3,6 @@ package ingest
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
@@ -53,52 +51,52 @@ func New(s *store.Store, cfg Config) (*Importer, error) {
 	return &Importer{store: s, cfg: cfg}, nil
 }
 
-// Run imports data, the content of sourceFile, and returns its report.
+// Run imports src and returns its report.
 //
-// Entries are committed in batches. If a batch fails, the batches already
-// committed stay applied, the run is marked failed and the returned report
-// covers what was committed; running the same file again is safe because
-// links are idempotent and the last message wins.
-func (im *Importer) Run(ctx context.Context, sourceFile string, data []byte) (*report.Report, error) {
-	sum := sha256.Sum256(data)
+// The file is streamed twice and never held in memory: a first pass indexes
+// it (hash, and the last position of each seller item, for last-wins), a
+// second pass imports it. Batches bound the size of each transaction, not
+// the memory. If a batch fails, the batches already committed stay applied,
+// the run is marked failed and the returned report covers what was
+// committed; running the same file again is safe because links are
+// idempotent and the last message wins.
+func (im *Importer) Run(ctx context.Context, src Source) (*report.Report, error) {
 	rep := &report.Report{
-		DryRun:       im.cfg.DryRun,
-		Status:       store.RunRunning,
-		SourceFile:   sourceFile,
-		SourceSha256: hex.EncodeToString(sum[:]),
-		StartedAt:    im.cfg.Now().UTC(),
+		DryRun:     im.cfg.DryRun,
+		Status:     store.RunRunning,
+		SourceFile: src.Name(),
+		StartedAt:  im.cfg.Now().UTC(),
 	}
-	if im.cfg.DryRun {
-		return rep, im.runDry(ctx, rep, data)
-	}
-	return rep, im.runBatches(ctx, rep, data)
-}
-
-// prepare parses the file, rejects invalid entries and applies the
-// whole-file distinct before any batching, so that the last occurrence of an
-// item wins even when its occurrences fall in different batches.
-func (im *Importer) prepare(rep *report.Report, data []byte) ([]Entry, error) {
-	entries, err := ParseEntries(data)
+	idx, err := indexSource(src)
 	if err != nil {
-		return nil, err
+		// Nothing was written: a malformed file is refused before the run starts.
+		im.finish(rep, store.RunFailed)
+		return rep, err
 	}
-	var valid []Entry
-	for _, e := range entries {
-		if reason := validate(e); reason != "" {
-			rep.Add(reportEntry(e, report.OutcomeRejected, reason, ""))
-			continue
-		}
-		valid = append(valid, e)
+	rep.SourceSha256 = idx.sha256
+	if im.cfg.DryRun {
+		return rep, im.runDry(ctx, rep, src, idx)
 	}
-	kept, superseded, by := distinct(valid)
-	for _, e := range superseded {
-		rep.Add(reportEntry(e, report.OutcomeDuplicateInBatch, "",
-			fmt.Sprintf("superseded by the entry at position %d", by[e.Position])))
-	}
-	return kept, nil
+	return rep, im.runBatches(ctx, rep, src, idx)
 }
 
-func (im *Importer) runDry(ctx context.Context, rep *report.Report, data []byte) error {
+// triage reports an entry that is not processed: invalid, or superseded by a
+// later occurrence of the same seller item (SPEC decision 2). It returns
+// true when the entry must be processed.
+func (im *Importer) triage(rep *report.Report, idx index, e Entry) bool {
+	if reason := validate(e); reason != "" {
+		rep.Add(reportEntry(e, report.OutcomeRejected, reason, ""))
+		return false
+	}
+	if last := idx.last[sellerItem{e.SellerName, e.ID}]; last != e.Position {
+		rep.Add(reportEntry(e, report.OutcomeDuplicateInBatch, "",
+			fmt.Sprintf("superseded by the entry at position %d", last)))
+		return false
+	}
+	return true
+}
+
+func (im *Importer) runDry(ctx context.Context, rep *report.Report, src Source, idx index) error {
 	tx, err := im.store.Begin(ctx)
 	if err != nil {
 		return err
@@ -107,24 +105,26 @@ func (im *Importer) runDry(ctx context.Context, rep *report.Report, data []byte)
 	if rep.RunID, err = tx.StartRun(ctx, rep.SourceFile, rep.SourceSha256, rep.StartedAt); err != nil {
 		return err
 	}
-	entries, err := im.prepare(rep, data)
-	if err != nil {
-		rep.Status = store.RunFailed
-		return err
-	}
-	for _, e := range entries {
+	err = stream(src, idx, func(e Entry) error {
+		if !im.triage(rep, idx, e) {
+			return nil
+		}
 		res, err := im.process(ctx, tx, rep.RunID, e)
 		if err != nil {
-			rep.Status = store.RunFailed
-			return err
+			return fmt.Errorf("entry at position %d: %w", e.Position, err)
 		}
 		rep.Add(res)
+		return nil
+	})
+	if err != nil {
+		im.finish(rep, store.RunFailed)
+		return err
 	}
 	im.finish(rep, store.RunCompleted)
 	return nil // deferred Rollback discards everything
 }
 
-func (im *Importer) runBatches(ctx context.Context, rep *report.Report, data []byte) (err error) {
+func (im *Importer) runBatches(ctx context.Context, rep *report.Report, src Source, idx index) (err error) {
 	// A panic must not leave the run as "running": record it as failed and
 	// let the panic go on to the caller, which owns the process.
 	defer func() {
@@ -149,15 +149,30 @@ func (im *Importer) runBatches(ctx context.Context, rep *report.Report, data []b
 		return err
 	}
 
-	entries, err := im.prepare(rep, data)
+	batch := make([]Entry, 0, im.cfg.BatchSize)
+	flush := func() error {
+		if len(batch) == 0 {
+			return nil
+		}
+		err := im.runBatch(ctx, rep, batch)
+		batch = batch[:0]
+		return err
+	}
+	err = stream(src, idx, func(e Entry) error {
+		if !im.triage(rep, idx, e) {
+			return nil
+		}
+		batch = append(batch, e)
+		if len(batch) == im.cfg.BatchSize {
+			return flush()
+		}
+		return nil
+	})
+	if err == nil {
+		err = flush()
+	}
 	if err != nil {
 		return im.fail(ctx, rep, err)
-	}
-	for start := 0; start < len(entries); start += im.cfg.BatchSize {
-		end := min(start+im.cfg.BatchSize, len(entries))
-		if err := im.runBatch(ctx, rep, entries[start:end]); err != nil {
-			return im.fail(ctx, rep, err)
-		}
 	}
 
 	im.finish(rep, store.RunCompleted)

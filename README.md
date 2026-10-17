@@ -55,7 +55,7 @@ The main decisions, detailed in [`SPEC.md` section 4](SPEC.md#4-decisions):
 - **The catalog is never changed by seller data.** The link keeps what the seller sent and how it was matched.
 - **The database enforces the rules**: `UNIQUE` on the normalized key and on the seller item, foreign keys on, versioned migration (`PRAGMA user_version`).
 - **Security** comes from parameterized statements only. The exclusion list is content policy, not an injection filter.
-- **Imports run in batches** (500 by default) and are recorded in `ImportRun` with the file's SHA-256. A failed run is recovered by running the file again.
+- **Batches bound the transaction, streaming bounds the memory.** Each transaction holds 500 entries by default. The file is streamed twice and never loaded whole: a first pass indexes the last occurrence of each seller item, a second pass imports. Every run is recorded in `ImportRun` with the file's SHA-256; a failed run is recovered by running the file again.
 
 Each run writes a JSON report to `reports/` with every entry's outcome, reason and warnings.
 
@@ -68,7 +68,7 @@ internal/similarity/   token Jaccard (pure)
 internal/translate/    Translator interface and word glossary
 internal/rules/        exclusion list
 internal/store/        SQLite access and migrations
-internal/ingest/       the pipeline: validation, distinct, matching, links, batches
+internal/ingest/       the pipeline: two-pass streaming, validation, distinct, matching, links, batches
 internal/report/       report model, JSON file and summary
 internal/testutil/     test helper: databases with the original schema
 config/                files editable without code changes: glossary, exclusion list, data checksums
@@ -114,6 +114,7 @@ I worked with an AI coding agent (Claude Code) as a pair, spec first. The agent'
 | Accept non-UUID ids with a warning | No format check at all. Seller SKUs come in many formats, and the assessment requires none. |
 | A per-line import log table | Only `ImportRun`, with the file's hash. To audit or re-process, the file is run again. |
 | One transaction per file | Batches of 500. This is still safe thanks to idempotency and last-wins. |
+| Batches, with the whole file read into memory | Streaming in two passes, so that the batches are not contradicted by the memory use: batches bound the transaction, streaming bounds the memory. |
 | Keep a pristine copy of the database for `reset` | `reset` downloads it again: simpler. |
 | No content filter (injection handled by parameterization only) | An exclusion list of known unwanted terms as a separate stage, framed as content policy. |
 | Test names prefixed with the finding number | Names that describe behaviour. |
@@ -133,4 +134,4 @@ These are also listed in [`SPEC.md` section 8](SPEC.md#8-out-of-scope--future-wo
 - **The similarity threshold** was calibrated on only two positive cases. Token Jaccard does not catch typos inside a word. A combined metric is the next step.
 - **`possible_duplicate` warnings** have no review queue yet.
 - **Sellers are identified by free-text names.** A `Seller` table would fix that.
-- **The input is read into memory** for the whole-file distinct. Very large files would need streaming and a staging table.
+- **The report is kept in memory** until the end, one line per entry, and the index keeps one key per seller item. For millions of entries, the next steps are a streamed report and a staging table (see `SPEC.md` section 8).

@@ -1,9 +1,6 @@
 package ingest
 
 import (
-	"bytes"
-	"encoding/json"
-	"fmt"
 	"strings"
 
 	"github.com/marcosiw/catalog-consolidation/internal/report"
@@ -27,26 +24,15 @@ type rawEntry struct {
 	Category   *string `json:"Category"`
 }
 
-// ParseEntries decodes the input file, a JSON array of entries. A malformed
-// file is a system error: nothing can be imported from it.
-func ParseEntries(data []byte) ([]Entry, error) {
-	var raw []rawEntry
-	dec := json.NewDecoder(bytes.NewReader(data))
-	if err := dec.Decode(&raw); err != nil {
-		return nil, fmt.Errorf("parse entries: %w", err)
+func (r rawEntry) entry(position int) Entry {
+	return Entry{
+		Position:   position,
+		ID:         value(r.ID),
+		SellerName: value(r.SellerName),
+		Name:       value(r.Name),
+		Brand:      r.Brand,
+		Category:   r.Category,
 	}
-	entries := make([]Entry, len(raw))
-	for i, r := range raw {
-		entries[i] = Entry{
-			Position:   i + 1,
-			ID:         value(r.ID),
-			SellerName: value(r.SellerName),
-			Name:       value(r.Name),
-			Brand:      r.Brand,
-			Category:   r.Category,
-		}
-	}
-	return entries, nil
 }
 
 func value(s *string) string {
@@ -70,29 +56,4 @@ func validate(e Entry) string {
 		return report.ReasonMissingName
 	}
 	return ""
-}
-
-type sellerItem struct {
-	sellerName string
-	id         string
-}
-
-// distinct keeps, for each (SellerName, Id), the last entry of the file: the
-// most recent message of that seller about that item (SPEC decision 2). It
-// returns the kept entries in file order and the superseded ones.
-func distinct(entries []Entry) (kept, superseded []Entry, supersededBy map[int]int) {
-	last := make(map[sellerItem]int)
-	for _, e := range entries {
-		last[sellerItem{e.SellerName, e.ID}] = e.Position
-	}
-	supersededBy = make(map[int]int)
-	for _, e := range entries {
-		if p := last[sellerItem{e.SellerName, e.ID}]; p != e.Position {
-			superseded = append(superseded, e)
-			supersededBy[e.Position] = p
-			continue
-		}
-		kept = append(kept, e)
-	}
-	return kept, superseded, supersededBy
 }
