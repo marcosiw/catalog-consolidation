@@ -19,6 +19,20 @@ Read `SPEC.md` before any change. It is the source of truth; if a change contrad
 - English for code, comments, docs and commit messages.
 - Small commits, one slice of the SPEC each, tests included.
 
+## Commits and versions
+
+- Commit messages follow [Conventional Commits 1.0](https://www.conventionalcommits.org/en/v1.0.0/): `<type>(<scope>): <summary>`, imperative, lower case, no final period, header up to 72 characters.
+  - Types: `feat`, `fix`, `test`, `refactor`, `docs`, `build` (Makefile, dependencies), `chore`.
+  - Scope is the package or area: `normalize`, `similarity`, `translate`, `rules`, `store`, `ingest`, `report`, `cli`, `matching` (several matching packages at once).
+  - An incompatible change to the public API adds a `BREAKING CHANGE:` footer.
+  - Keep the `Co-Authored-By:` trailer when an AI agent took part.
+- Releases follow [Semantic Versioning 2.0](https://semver.org/) with Go module tags (`vMAJOR.MINOR.PATCH`). The public API is:
+  - the command-line flags;
+  - the JSON report format;
+  - the database schema (`PRAGMA user_version`).
+
+  Breaking any of them is a major change; `feat` is a minor change and `fix` a patch. While on `0.x` the API is not considered stable. The delivered version is tagged `v0.1.0`.
+
 ## Commands
 
 ```bash
