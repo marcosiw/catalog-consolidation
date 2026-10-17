@@ -82,21 +82,29 @@ type Report struct {
 
 // Add records an entry result and updates the counters.
 func (r *Report) Add(e Entry) {
-	switch e.Outcome {
-	case OutcomeCreated:
-		r.Counters.Created++
-	case OutcomeLinked:
-		r.Counters.Linked++
-	case OutcomeMoved:
-		r.Counters.Moved++
-	case OutcomeUnchanged:
-		r.Counters.Unchanged++
-	case OutcomeRejected:
-		r.Counters.Rejected++
-	case OutcomeDuplicateInBatch:
-		r.Counters.DuplicateInBatch++
-	}
+	r.Counters = Tally(r.Counters, e)
 	r.Entries = append(r.Entries, e)
+}
+
+// Tally returns c plus the outcomes of entries, without recording them.
+func Tally(c store.Counters, entries ...Entry) store.Counters {
+	for _, e := range entries {
+		switch e.Outcome {
+		case OutcomeCreated:
+			c.Created++
+		case OutcomeLinked:
+			c.Linked++
+		case OutcomeMoved:
+			c.Moved++
+		case OutcomeUnchanged:
+			c.Unchanged++
+		case OutcomeRejected:
+			c.Rejected++
+		case OutcomeDuplicateInBatch:
+			c.DuplicateInBatch++
+		}
+	}
+	return c
 }
 
 // SortByPosition orders entries as they appear in the input file.

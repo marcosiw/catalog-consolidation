@@ -125,7 +125,9 @@ func migrateV1(ctx context.Context, tx *sql.Tx) error {
 }
 
 // backfillNormalizedKey computes the normalized key of every existing product
-// with the same function used for incoming entries.
+// with the same function used for incoming entries. Keys are read first and
+// written after, rather than updating rows while iterating over the same
+// table; this holds one small key per product in memory, once.
 func backfillNormalizedKey(ctx context.Context, tx *sql.Tx) error {
 	rows, err := tx.QueryContext(ctx, `SELECT Id, Name, Brand FROM Product`)
 	if err != nil {

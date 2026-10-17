@@ -65,6 +65,7 @@ func (im *Importer) Run(ctx context.Context, src Source) (*report.Report, error)
 		SourceFile: src.Name(),
 		StartedAt:  im.cfg.Now().UTC(),
 	}
+
 	idx, err := indexSource(src)
 	if err != nil {
 		// Nothing was written: a malformed file is refused before the run starts.
@@ -72,7 +73,46 @@ func (im *Importer) Run(ctx context.Context, src Source) (*report.Report, error)
 		return rep, err
 	}
 	rep.SourceSha256 = idx.sha256
-	return rep, im.runBatches(ctx, rep, src, idx)
+
+	if err := im.startRun(ctx, rep); err != nil {
+		return rep, err
+	}
+	if err := im.importEntries(ctx, rep, src, idx); err != nil {
+		return rep, im.fail(ctx, rep, err)
+	}
+	im.finish(rep, store.RunCompleted)
+	return rep, im.updateRun(ctx, rep)
+}
+
+func (im *Importer) startRun(ctx context.Context, rep *report.Report) error {
+	return im.store.InTx(ctx, func(tx *store.Tx) error {
+		id, err := tx.StartRun(ctx, rep.SourceFile, rep.SourceSha256, rep.StartedAt)
+		rep.RunID = id
+		return err
+	})
+}
+
+// importEntries streams the file and commits its entries in batches.
+func (im *Importer) importEntries(ctx context.Context, rep *report.Report, src Source, idx index) error {
+	defer im.failOnPanic(ctx, rep)
+
+	var batch []Entry
+	err := stream(src, idx, func(e Entry) error {
+		if !im.triage(rep, idx, e) {
+			return nil
+		}
+		batch = append(batch, e)
+		if len(batch) < im.cfg.BatchSize {
+			return nil
+		}
+		err := im.runBatch(ctx, rep, batch)
+		batch = batch[:0]
+		return err
+	})
+	if err != nil || len(batch) == 0 {
+		return err
+	}
+	return im.runBatch(ctx, rep, batch) // the last, partial batch
 }
 
 // triage reports an entry that is not processed: invalid, or superseded by a
@@ -91,88 +131,28 @@ func (im *Importer) triage(rep *report.Report, idx index, e Entry) bool {
 	return true
 }
 
-func (im *Importer) runBatches(ctx context.Context, rep *report.Report, src Source, idx index) (err error) {
-	// A panic must not leave the run as "running": record it as failed and
-	// let the panic go on to the caller, which owns the process.
-	defer func() {
-		if p := recover(); p != nil {
-			if rep.RunID != 0 {
-				im.fail(ctx, rep, fmt.Errorf("panic: %v", p))
-			}
-			panic(p)
-		}
-	}()
-
-	tx, err := im.store.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	rep.RunID, err = tx.StartRun(ctx, rep.SourceFile, rep.SourceSha256, rep.StartedAt)
-	if err == nil {
-		err = tx.Commit()
-	}
-	if err != nil {
-		tx.Rollback()
-		return err
-	}
-
-	batch := make([]Entry, 0, im.cfg.BatchSize)
-	flush := func() error {
-		if len(batch) == 0 {
-			return nil
-		}
-		err := im.runBatch(ctx, rep, batch)
-		batch = batch[:0]
-		return err
-	}
-	err = stream(src, idx, func(e Entry) error {
-		if !im.triage(rep, idx, e) {
-			return nil
-		}
-		batch = append(batch, e)
-		if len(batch) == im.cfg.BatchSize {
-			return flush()
-		}
-		return nil
-	})
-	if err == nil {
-		err = flush()
-	}
-	if err != nil {
-		return im.fail(ctx, rep, err)
-	}
-
-	im.finish(rep, store.RunCompleted)
-	return im.updateRun(ctx, rep)
-}
-
-// runBatch processes entries in one transaction. Results reach the report
-// only after the commit, so a failed batch leaves no trace in it.
+// runBatch processes entries in one transaction, together with the run's
+// counters. Results reach the report only after the commit, so a failed
+// batch leaves no trace in it.
 func (im *Importer) runBatch(ctx context.Context, rep *report.Report, entries []Entry) error {
-	tx, err := im.store.Begin(ctx)
+	results := make([]report.Entry, 0, len(entries))
+	err := im.store.InTx(ctx, func(tx *store.Tx) error {
+		for _, e := range entries {
+			res, err := im.process(ctx, tx, rep.RunID, e)
+			if err != nil {
+				return fmt.Errorf("entry at position %d: %w", e.Position, err)
+			}
+			results = append(results, res)
+		}
+		counters := report.Tally(rep.Counters, results...)
+		return tx.UpdateRun(ctx, rep.RunID, store.RunRunning, counters, time.Time{})
+	})
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
-	results := make([]report.Entry, 0, len(entries))
-	for _, e := range entries {
-		res, err := im.process(ctx, tx, rep.RunID, e)
-		if err != nil {
-			return fmt.Errorf("entry at position %d: %w", e.Position, err)
-		}
-		results = append(results, res)
-	}
-	committed := *rep
 	for _, r := range results {
-		committed.Add(r)
+		rep.Add(r)
 	}
-	if err := tx.UpdateRun(ctx, rep.RunID, store.RunRunning, committed.Counters, time.Time{}); err != nil {
-		return err
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit batch: %w", err)
-	}
-	*rep = committed
 	return nil
 }
 
@@ -193,16 +173,19 @@ func (im *Importer) fail(ctx context.Context, rep *report.Report, cause error) e
 	return cause
 }
 
+// failOnPanic, deferred, records the run as failed when a panic goes through
+// and lets the panic go on: the caller owns the process.
+func (im *Importer) failOnPanic(ctx context.Context, rep *report.Report) {
+	if p := recover(); p != nil {
+		im.fail(ctx, rep, fmt.Errorf("panic: %v", p))
+		panic(p)
+	}
+}
+
 func (im *Importer) updateRun(ctx context.Context, rep *report.Report) error {
-	tx, err := im.store.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	if err := tx.UpdateRun(ctx, rep.RunID, rep.Status, rep.Counters, rep.FinishedAt); err != nil {
-		return err
-	}
-	return tx.Commit()
+	return im.store.InTx(ctx, func(tx *store.Tx) error {
+		return tx.UpdateRun(ctx, rep.RunID, rep.Status, rep.Counters, rep.FinishedAt)
+	})
 }
 
 // process runs one valid, distinct entry through the pipeline. Data problems

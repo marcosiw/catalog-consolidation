@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -306,4 +307,55 @@ func TestOpen_MigratesProvidedCatalog(t *testing.T) {
 	if products != 975 || keys != 975 {
 		t.Errorf("products = %d with %d distinct keys, want 975 and 975", products, keys)
 	}
+}
+
+func TestStore_InTx(t *testing.T) {
+	ctx := context.Background()
+	countRuns := func(t *testing.T, s *Store) int {
+		var n int
+		if err := s.db.QueryRow(`SELECT count(*) FROM ImportRun`).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	start := func(tx *Tx) error {
+		_, err := tx.StartRun(ctx, "entries.json", "sha", time.Now())
+		return err
+	}
+
+	t.Run("commits_when_fn_succeeds", func(t *testing.T) {
+		s := openStore(t, testutil.NewOriginalDB(t))
+		if err := s.InTx(ctx, start); err != nil {
+			t.Fatal(err)
+		}
+		if n := countRuns(t, s); n != 1 {
+			t.Errorf("runs = %d, want 1", n)
+		}
+	})
+	t.Run("rolls_back_when_fn_fails", func(t *testing.T) {
+		s := openStore(t, testutil.NewOriginalDB(t))
+		boom := errors.New("boom")
+		err := s.InTx(ctx, func(tx *Tx) error {
+			if err := start(tx); err != nil {
+				return err
+			}
+			return boom
+		})
+		if !errors.Is(err, boom) || countRuns(t, s) != 0 {
+			t.Errorf("InTx = %v with %d runs, want boom and 0", err, countRuns(t, s))
+		}
+	})
+	t.Run("rolls_back_when_fn_panics", func(t *testing.T) {
+		s := openStore(t, testutil.NewOriginalDB(t))
+		func() {
+			defer func() { recover() }()
+			s.InTx(ctx, func(tx *Tx) error {
+				start(tx)
+				panic("boom")
+			})
+		}()
+		if n := countRuns(t, s); n != 0 {
+			t.Errorf("runs = %d, want 0", n)
+		}
+	})
 }

@@ -27,9 +27,11 @@ type resolution struct {
 //
 // Similarity alone never links: two independent signals must agree.
 func (im *Importer) resolve(ctx context.Context, tx *store.Tx, name, brand string) (resolution, error) {
-	if p, ok, err := tx.FindProductByKey(ctx, name, brand); err != nil {
+	p, found, err := tx.FindProductByKey(ctx, name, brand)
+	if err != nil {
 		return resolution{}, err
-	} else if ok {
+	}
+	if found {
 		return resolution{productID: p.ID, method: store.MatchNormalized, score: ptr(1.0)}, nil
 	}
 
@@ -37,47 +39,60 @@ func (im *Importer) resolve(ctx context.Context, tx *store.Tx, name, brand strin
 	if brand == "" {
 		return resolution{method: store.MatchNew}, nil
 	}
-	sameBrand, err := tx.ProductsByBrand(ctx, brand)
+	candidates, best, err := im.candidates(ctx, tx, name, brand)
 	if err != nil {
 		return resolution{}, err
-	}
-	var (
-		candidates []store.Product
-		scores     []float64
-	)
-	for _, p := range sameBrand {
-		if s := similarity.Jaccard(name, p.NormalizedName); s >= im.cfg.SimilarityThreshold {
-			candidates = append(candidates, p)
-			scores = append(scores, s)
-		}
 	}
 	if len(candidates) == 0 {
 		return resolution{method: store.MatchNew}, nil
 	}
 
 	translated := im.cfg.Translator.Translate(name)
-	for i, c := range candidates {
-		if translated == c.NormalizedName {
-			return resolution{productID: c.ID, method: store.MatchTranslated, score: ptr(scores[i])}, nil
+	for _, c := range candidates {
+		if translated == c.product.NormalizedName {
+			return resolution{productID: c.product.ID, method: store.MatchTranslated, score: ptr(c.score)}, nil
 		}
 	}
 
-	best := 0
-	for i := range scores {
-		if scores[i] > scores[best] {
-			best = i
-		}
-	}
 	return resolution{
 		method: store.MatchNew,
 		warnings: []report.Warning{{
 			Code: report.WarningPossibleDuplicate,
 			Message: fmt.Sprintf("similar to product %d %q (score %.2f) but translation did not confirm it",
-				candidates[best].ID, candidates[best].Name, scores[best]),
-			ProductID: candidates[best].ID,
-			Score:     ptr(scores[best]),
+				best.product.ID, best.product.Name, best.score),
+			ProductID: best.product.ID,
+			Score:     ptr(best.score),
 		}},
 	}, nil
+}
+
+type candidate struct {
+	product store.Product
+	score   float64
+}
+
+// candidates returns the same-brand products whose token Jaccard with name
+// reaches the threshold, and the best of them.
+func (im *Importer) candidates(ctx context.Context, tx *store.Tx, name, brand string) ([]candidate, candidate, error) {
+	sameBrand, err := tx.ProductsByBrand(ctx, brand)
+	if err != nil {
+		return nil, candidate{}, err
+	}
+	var (
+		found []candidate
+		best  candidate
+	)
+	for _, p := range sameBrand {
+		c := candidate{p, similarity.Jaccard(name, p.NormalizedName)}
+		if c.score < im.cfg.SimilarityThreshold {
+			continue
+		}
+		found = append(found, c)
+		if c.score > best.score {
+			best = c
+		}
+	}
+	return found, best, nil
 }
 
 func ptr[T any](v T) *T { return &v }

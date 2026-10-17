@@ -54,6 +54,23 @@ func (s *Store) Begin(ctx context.Context) (*Tx, error) {
 	return &Tx{tx: tx}, nil
 }
 
+// InTx runs fn in a transaction, committed when fn returns nil and rolled
+// back otherwise, including when fn panics.
+func (s *Store) InTx(ctx context.Context, fn func(*Tx) error) error {
+	tx, err := s.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := fn(tx); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit: %w", err)
+	}
+	return nil
+}
+
 // Tx is a transaction on the catalog.
 type Tx struct {
 	tx *sql.Tx

@@ -25,6 +25,15 @@ func TestReport_Add(t *testing.T) {
 	}
 }
 
+func TestTally_AddsOutcomesWithoutRecordingThem(t *testing.T) {
+	start := store.Counters{Linked: 5}
+	got := Tally(start, Entry{Outcome: OutcomeLinked}, Entry{Outcome: OutcomeCreated})
+	want := store.Counters{Linked: 6, Created: 1}
+	if got != want || start.Linked != 5 {
+		t.Errorf("Tally = %+v (start %+v), want %+v and start untouched", got, start, want)
+	}
+}
+
 func TestReport_SortByPosition_RestoresFileOrder(t *testing.T) {
 	// Rejections and duplicates are added before the processed entries.
 	var r Report
