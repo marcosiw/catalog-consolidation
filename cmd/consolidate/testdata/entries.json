@@ -1,0 +1,16 @@
+[
+  {
+    "Id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+    "SellerName": "GameStore",
+    "Name": "Xbox  Series X",
+    "Brand": "MICROSOFT",
+    "Category": "Games"
+  },
+  {
+    "Id": "SKU-NSW-OLED",
+    "SellerName": "GameStore",
+    "Name": "Nintendo Switch OLED",
+    "Brand": "Nintendo",
+    "Category": "Gaming"
+  }
+]

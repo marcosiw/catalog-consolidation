@@ -144,6 +144,8 @@ go run ./cmd/consolidate \
 | `--batch-size` | `500` | Entries committed per transaction (decision 9). Ignored with `--dry-run`. |
 | `--dry-run` | off | Roll everything back at the end; the report is still written. Omit it to import for real. |
 
+Exit codes: `0` the import completed; `1` the import failed (the report shows what the committed batches did); `2` invalid usage or configuration; `3` internal error (a recovered panic, printed with its stack trace). Ctrl+C or SIGTERM cancel the import: the batch in progress is rolled back and the run is recorded as `failed`; a panic also records the run as `failed` before the process exits.
+
 ## 7. Tests
 
 - **Unit**: every finding of section 2 is covered by at least one test, named after the expected behaviour (see `AGENTS.md`).
