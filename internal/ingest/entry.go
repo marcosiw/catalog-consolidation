@@ -1,6 +1,7 @@
 package ingest
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/marcosiw/catalog-consolidation/internal/report"
@@ -56,4 +57,20 @@ func validate(e Entry) string {
 		return report.ReasonMissingName
 	}
 	return ""
+}
+
+// triage reports an entry that is not processed: invalid, or superseded by a
+// later occurrence of the same seller item (SPEC decision 2). It returns
+// true when the entry must be processed.
+func (im *Importer) triage(rep *report.Report, idx index, e Entry) bool {
+	if reason := validate(e); reason != "" {
+		rep.Add(reportEntry(e, report.OutcomeRejected, reason, ""))
+		return false
+	}
+	if last := idx.last[sellerItem{e.SellerName, e.ID}]; last != e.Position {
+		rep.Add(reportEntry(e, report.OutcomeDuplicateInBatch, "",
+			fmt.Sprintf("superseded by the entry at position %d", last)))
+		return false
+	}
+	return true
 }
