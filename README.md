@@ -12,7 +12,6 @@ Requirements: Go 1.27 (any Go from 1.21 on downloads it automatically), `make`, 
 make            # list the targets
 make data       # download the provided database and seller file, verify checksums
 make test       # go vet + every test (no network or data needed)
-make dry-run    # simulate the import and write the report; the database is not changed
 make run        # import
 make inspect    # look at the result
 make run        # again: everything is "unchanged" (idempotency)
@@ -115,6 +114,7 @@ I worked with an AI coding agent (Claude Code) as a pair, spec first. The agent'
 | A per-line import log table | Only `ImportRun`, with the file's hash. To audit or re-process, the file is run again. |
 | One transaction per file | Batches of 100. This is still safe thanks to idempotency and last-wins. |
 | Batches, with the whole file read into memory | Streaming in two passes, so that the batches are not contradicted by the memory use: batches bound the transaction, streaming bounds the memory. |
+| A `--dry-run` mode (one transaction rolled back at the end) | Removed. It is not required, the database is disposable (`make reset`), and it needed a second execution path that was not the one that runs for real. |
 | Keep a pristine copy of the database for `reset` | `reset` downloads it again: simpler. |
 | No content filter (injection handled by parameterization only) | An exclusion list of known unwanted terms as a separate stage, framed as content policy. |
 | Test names prefixed with the finding number | Names that describe behaviour. |

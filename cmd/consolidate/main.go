@@ -86,7 +86,6 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) (code int
 	importer, err := ingest.New(s, ingest.Config{
 		SimilarityThreshold: cfg.threshold,
 		BatchSize:           cfg.batchSize,
-		DryRun:              cfg.dryRun,
 		Translator:          glossary,
 		Exclusions:          exclusions,
 	})
@@ -123,7 +122,6 @@ type config struct {
 	db, input, glossary, exclusionList, reportDir string
 	threshold                                     float64
 	batchSize                                     int
-	dryRun                                        bool
 }
 
 func parseFlags(args []string, stderr io.Writer) (config, error) {
@@ -136,8 +134,7 @@ func parseFlags(args []string, stderr io.Writer) (config, error) {
 	fs.StringVar(&c.glossary, "glossary", "config/glossary-pt-en.json", "word-by-word translation glossary that confirms candidates")
 	fs.StringVar(&c.exclusionList, "exclusion-list", "config/exclusion-list.json", "terms that reject an entry when contained in its name or brand")
 	fs.StringVar(&c.reportDir, "report-dir", "reports", "directory where the JSON report is written")
-	fs.IntVar(&c.batchSize, "batch-size", 100, "entries committed per transaction; ignored with -dry-run")
-	fs.BoolVar(&c.dryRun, "dry-run", false, "roll everything back at the end; the report is still written")
+	fs.IntVar(&c.batchSize, "batch-size", 100, "entries committed per transaction")
 	if err := fs.Parse(args); err != nil {
 		return config{}, err
 	}

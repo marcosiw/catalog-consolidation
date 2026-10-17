@@ -46,7 +46,6 @@ Test names describe the expected behaviour, never the problem that motivated it,
 ```bash
 make test      # unit + integration tests
 make data      # download the real data and verify checksums
-make dry-run   # simulate an import, write the report, change nothing
 make run       # import
 make reset     # restore the original database
 make inspect   # query the result

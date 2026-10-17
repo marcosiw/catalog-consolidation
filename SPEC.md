@@ -96,7 +96,7 @@ The shopper must see each product **once**, with every seller's offer attached t
      - If the file changes between the two passes (its hash differs), the run fails.
    - Data errors reject the entry and the run goes on (`missing_id`, `missing_seller_name`, `missing_name` — also when the name has no letter or digit; an empty brand is allowed). A malformed file is refused by the first pass, **before anything is written**: no run is recorded and no report is produced. Other system errors (database unavailable, unexpected constraint violation, file changed during the import) roll back the batch, mark the run `failed` and exit non-zero.
    - Migrations are versioned with `PRAGMA user_version`, idempotent and applied automatically at start. `PRAGMA foreign_keys = ON` on every connection.
-   - `--dry-run` runs everything in a single transaction that is rolled back at the end (batch size ignored) and still writes the report.
+   - There is no dry-run mode: the database is disposable, so the way to try an import is `make run`, then `make reset`. A dry-run would need its own execution path (batches are committed and cannot be rolled back), and that second path would not be the one that runs for real.
 10. **Exclusion list** (stage 0c): a file of forbidden terms that grows without code changes. If `Name` or `Brand` contains a term anywhere, the entry is rejected (`exclusion_list`, with the matched term). Comparison is case-insensitive with collapsed spaces, **keeping punctuation**. Initial terms: `Security Test Product`, `SELECT 1;`. This is **catalog content policy** (sellers pushing test items to production), not a security control. Terms must be specific: `test` alone would match `Contest`.
 11. **Conventions.** No code conventions are defined in the guideline, so this follows standard Go (`gofmt`, `go vet`, `cmd/` + `internal/`, table-driven tests, wrapped errors). Driver `modernc.org/sqlite` (pure Go, no CGO needed).
 
@@ -118,7 +118,6 @@ Each run prints a summary and writes `reports/run-<id>.json`:
 | `make data` | Downloads `catalog.db` and `ProductEntry.json` from the public URLs into `data/` and verifies their SHA-256. |
 | `make reset` | Downloads `catalog.db` again, replacing the local one, so the database is back to its original state. Run it before a demo: `make run` changes the database. |
 | `make test` | Runs `go vet` and every test (unit and integration). Needs no network and no downloaded data; the real-data test runs only if `data/` exists. |
-| `make dry-run` | Runs the full import inside one transaction that is rolled back at the end, and writes the report. Shows what would happen without changing the database. |
 | `make run` | Runs the import for real: migrates the schema if needed, writes products and links, records an `ImportRun` and writes the report. Running it twice shows idempotency: the second run changes nothing. |
 | `make inspect` | Prints a few ready-made queries on the result: links by match method, products created by the import, warnings of the last report and the latest `ImportRun` rows. |
 
@@ -134,8 +133,7 @@ go run ./cmd/consolidate \
   --glossary config/glossary-pt-en.json \
   --exclusion-list config/exclusion-list.json \
   --report-dir reports \
-  --batch-size 100 \
-  --dry-run
+  --batch-size 100
 ```
 
 | Flag | Default | Meaning |
@@ -146,8 +144,7 @@ go run ./cmd/consolidate \
 | `--glossary` | `config/glossary-pt-en.json` | Word-by-word translation glossary used to confirm candidates (stage 3). |
 | `--exclusion-list` | `config/exclusion-list.json` | Terms that reject an entry when contained in its name or brand (decision 10). |
 | `--report-dir` | `reports` | Directory where `run-<id>.json` is written. |
-| `--batch-size` | `100` | Entries committed per transaction (decision 9). Ignored with `--dry-run`. |
-| `--dry-run` | off | Roll everything back at the end; the report is still written. Omit it to import for real. |
+| `--batch-size` | `100` | Entries committed per transaction (decision 9). |
 
 Exit codes: `0` the import completed; `1` the import failed (the report shows what the committed batches did); `2` invalid usage or configuration; `3` internal error (a recovered panic, printed with its stack trace). Ctrl+C or SIGTERM cancel the import: the batch in progress is rolled back and the run is recorded as `failed`; a panic also records the run as `failed` before the process exits.
 

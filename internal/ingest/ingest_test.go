@@ -357,24 +357,6 @@ func TestImporter_Run_AcrossRuns(t *testing.T) {
 	})
 }
 
-func TestImporter_Run_DryRunChangesNothing(t *testing.T) {
-	f := newFixture(t, catalog...)
-	cfg := defaultConfig(t)
-	cfg.DryRun = true
-	rep := f.run(t, cfg,
-		in{"a1", "GameStore", "Xbox Series X", "Microsoft", nil},
-		in{"a2", "GameStore", "Nintendo Switch OLED", "Nintendo", nil},
-	)
-	if rep.Counters.Linked != 1 || rep.Counters.Created != 1 || rep.Status != store.RunCompleted {
-		t.Errorf("dry run report = %+v (%s), want 1 linked, 1 created, completed", rep.Counters, rep.Status)
-	}
-	for table, want := range map[string]int{"Product": len(catalog), "SellerProduct": 0, "ImportRun": 0} {
-		if n := f.count(t, `SELECT count(*) FROM `+table); n != want {
-			t.Errorf("%s rows = %d, want %d", table, n, want)
-		}
-	}
-}
-
 func TestImporter_Run_RecordsCompletedRun(t *testing.T) {
 	f := newFixture(t, catalog...)
 	rep := f.run(t, defaultConfig(t), in{"a1", "GameStore", "Xbox Series X", "Microsoft", nil})

@@ -19,7 +19,6 @@ import (
 type Config struct {
 	SimilarityThreshold float64              // minimum token Jaccard for a candidate (decision 7)
 	BatchSize           int                  // entries per transaction (decision 9)
-	DryRun              bool                 // roll everything back at the end
 	Translator          translate.Translator // confirms candidates (stage 3)
 	Exclusions          *rules.ExclusionList // content policy (stage 0c)
 	Now                 func() time.Time     // clock, replaceable in tests
@@ -62,7 +61,6 @@ func New(s *store.Store, cfg Config) (*Importer, error) {
 // idempotent and the last message wins.
 func (im *Importer) Run(ctx context.Context, src Source) (*report.Report, error) {
 	rep := &report.Report{
-		DryRun:     im.cfg.DryRun,
 		Status:     store.RunRunning,
 		SourceFile: src.Name(),
 		StartedAt:  im.cfg.Now().UTC(),
@@ -74,9 +72,6 @@ func (im *Importer) Run(ctx context.Context, src Source) (*report.Report, error)
 		return rep, err
 	}
 	rep.SourceSha256 = idx.sha256
-	if im.cfg.DryRun {
-		return rep, im.runDry(ctx, rep, src, idx)
-	}
 	return rep, im.runBatches(ctx, rep, src, idx)
 }
 
@@ -94,34 +89,6 @@ func (im *Importer) triage(rep *report.Report, idx index, e Entry) bool {
 		return false
 	}
 	return true
-}
-
-func (im *Importer) runDry(ctx context.Context, rep *report.Report, src Source, idx index) error {
-	tx, err := im.store.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	if rep.RunID, err = tx.StartRun(ctx, rep.SourceFile, rep.SourceSha256, rep.StartedAt); err != nil {
-		return err
-	}
-	err = stream(src, idx, func(e Entry) error {
-		if !im.triage(rep, idx, e) {
-			return nil
-		}
-		res, err := im.process(ctx, tx, rep.RunID, e)
-		if err != nil {
-			return fmt.Errorf("entry at position %d: %w", e.Position, err)
-		}
-		rep.Add(res)
-		return nil
-	})
-	if err != nil {
-		im.finish(rep, store.RunFailed)
-		return err
-	}
-	im.finish(rep, store.RunCompleted)
-	return nil // deferred Rollback discards everything
 }
 
 func (im *Importer) runBatches(ctx context.Context, rep *report.Report, src Source, idx index) (err error) {

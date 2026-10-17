@@ -20,7 +20,7 @@ CONSOLIDATE = go run ./cmd/consolidate \
 	-batch-size $(BATCH_SIZE)
 
 .DEFAULT_GOAL := help
-.PHONY: help data reset test dry-run run inspect
+.PHONY: help data reset test run inspect
 
 help: ## List the targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  make %-9s %s\n", $$1, $$2}'
@@ -39,9 +39,6 @@ reset: ## Download the database again, back to its original state (make run chan
 test: ## Run go vet and every test; no network or downloaded data needed
 	go vet ./...
 	go test ./...
-
-dry-run: ## Simulate the import and write the report, without changing the database
-	$(CONSOLIDATE) -dry-run
 
 run: ## Import for real; running it twice shows idempotency
 	$(CONSOLIDATE)

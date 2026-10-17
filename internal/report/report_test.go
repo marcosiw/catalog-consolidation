@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/marcosiw/catalog-consolidation/internal/store"
 )
@@ -58,22 +57,10 @@ func TestReport_WarningCounts_CountsEveryWarningByCode(t *testing.T) {
 	}
 }
 
-func TestReport_FileName(t *testing.T) {
-	started := time.Date(2026, 10, 17, 20, 8, 40, 0, time.UTC)
-	tests := []struct {
-		name   string
-		report Report
-		want   string
-	}{
-		{"names_import_after_run_id", Report{RunID: 7, StartedAt: started}, "run-7.json"},
-		{"names_dry_run_after_start_time", Report{RunID: 7, DryRun: true, StartedAt: started}, "dry-run-20261017T200840Z.json"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.report.FileName(); got != tt.want {
-				t.Errorf("FileName() = %q, want %q", got, tt.want)
-			}
-		})
+func TestReport_FileName_NamesReportAfterRunID(t *testing.T) {
+	r := Report{RunID: 7}
+	if got := r.FileName(); got != "run-7.json" {
+		t.Errorf("FileName() = %q, want %q", got, "run-7.json")
 	}
 }
 
@@ -99,7 +86,7 @@ func TestReport_WriteFile_KeepsJSONFieldNames(t *testing.T) {
 	if err := json.Unmarshal(raw, &doc); err != nil {
 		t.Fatal(err)
 	}
-	for _, key := range []string{"run_id", "dry_run", "status", "source_file", "source_sha256", "started_at", "finished_at", "counters", "entries"} {
+	for _, key := range []string{"run_id", "status", "source_file", "source_sha256", "started_at", "finished_at", "counters", "entries"} {
 		if _, ok := doc[key]; !ok {
 			t.Errorf("report has no %q field", key)
 		}
@@ -119,11 +106,11 @@ func TestReport_WriteFile_KeepsJSONFieldNames(t *testing.T) {
 }
 
 func TestReport_WriteSummary_ShowsCountersAndWarnings(t *testing.T) {
-	r := Report{SourceFile: "entries.json", Status: store.RunCompleted, DryRun: true}
+	r := Report{SourceFile: "entries.json", Status: store.RunCompleted}
 	r.Add(Entry{Outcome: OutcomeLinked, Warnings: []Warning{{Code: WarningPossibleDuplicate}}})
 	var out bytes.Buffer
 	r.WriteSummary(&out)
-	for _, want := range []string{"dry run (nothing was saved)", "linked                1", "warning possible_duplicate"} {
+	for _, want := range []string{"import of entries.json: completed", "linked                1", "warning possible_duplicate"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("summary does not contain %q:\n%s", want, out.String())
 		}

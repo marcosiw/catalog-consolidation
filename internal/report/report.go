@@ -71,7 +71,6 @@ type Entry struct {
 // Report is the result of one import.
 type Report struct {
 	RunID        int64           `json:"run_id"`
-	DryRun       bool            `json:"dry_run"`
 	Status       store.RunStatus `json:"status"`
 	SourceFile   string          `json:"source_file"`
 	SourceSha256 string          `json:"source_sha256"`
@@ -116,12 +115,8 @@ func (r *Report) WarningCounts() map[string]int {
 	return counts
 }
 
-// FileName is run-<id>.json for an import and dry-run-<timestamp>.json for a
-// dry run, whose run id is rolled back and may be reused.
+// FileName is run-<id>.json, after the ImportRun it describes.
 func (r *Report) FileName() string {
-	if r.DryRun {
-		return "dry-run-" + r.StartedAt.UTC().Format("20060102T150405Z") + ".json"
-	}
 	return fmt.Sprintf("run-%d.json", r.RunID)
 }
 
@@ -143,12 +138,8 @@ func (r *Report) WriteFile(dir string) (string, error) {
 
 // WriteSummary prints the counters and warning totals for a person.
 func (r *Report) WriteSummary(w io.Writer) {
-	mode := "import"
-	if r.DryRun {
-		mode = "dry run (nothing was saved)"
-	}
 	c := r.Counters
-	fmt.Fprintf(w, "%s of %s: %s\n", mode, r.SourceFile, r.Status)
+	fmt.Fprintf(w, "import of %s: %s\n", r.SourceFile, r.Status)
 	fmt.Fprintf(w, "  created            %4d  new product and link\n", c.Created)
 	fmt.Fprintf(w, "  linked             %4d  existing product, new link\n", c.Linked)
 	fmt.Fprintf(w, "  moved              %4d  link moved to another product\n", c.Moved)

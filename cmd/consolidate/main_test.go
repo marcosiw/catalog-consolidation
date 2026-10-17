@@ -106,24 +106,6 @@ func TestRun_ImportsFixtureAndIsIdempotent(t *testing.T) {
 	}
 }
 
-func TestRun_DryRunWritesReportAndChangesNothing(t *testing.T) {
-	c := newCLI(t)
-	code, _, stderr := c.run(t, "-dry-run")
-	if code != exitOK {
-		t.Fatalf("exit = %d, stderr = %s", code, stderr)
-	}
-	files, _ := filepath.Glob(filepath.Join(c.reports, "dry-run-*.json"))
-	if len(files) != 1 {
-		t.Fatalf("dry-run reports = %v, want one", files)
-	}
-	if r := readReport(t, files[0]); !r.DryRun || r.Counters.Created != 1 {
-		t.Errorf("dry-run report = %+v, want dry_run with 1 created", r.Counters)
-	}
-	if p, l, runs := c.count(t, "Product"), c.count(t, "SellerProduct"), c.count(t, "ImportRun"); p != 2 || l != 0 || runs != 0 {
-		t.Errorf("after dry run: %d products, %d links, %d runs; want 2, 0, 0", p, l, runs)
-	}
-}
-
 func TestRun_ReturnsUsageErrors(t *testing.T) {
 	tests := []struct {
 		name string
