@@ -1,0 +1,18 @@
+{
+  "roteador": "router",
+  "processador": "processor",
+  "teclado": "keyboard",
+  "impressora": "printer",
+  "geladeira": "refrigerator",
+  "liquidificador": "blender",
+  "aspirador": "vacuum",
+  "ventilador": "fan",
+  "furadeira": "drill",
+  "cadeira": "chair",
+  "mochila": "backpack",
+  "garrafa": "bottle",
+  "travesseiro": "pillow",
+  "colchão": "mattress",
+  "luvas": "gloves",
+  "bola": "ball"
+}
