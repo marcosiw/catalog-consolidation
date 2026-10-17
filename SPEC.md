@@ -110,8 +110,8 @@ Each run prints a summary and writes `reports/run-<id>.json`:
 
 | Target | What it does |
 |---|---|
-| `make data` | Downloads `catalog.db` and `ProductEntry.json` from the public URLs into `data/`, verifies their SHA-256 and keeps the database as `data/catalog.original.db`, the pristine copy that is never written. |
-| `make reset` | Restores `data/catalog.db` from `data/catalog.original.db`. Run it before a demo: `make run` changes the database. |
+| `make data` | Downloads `catalog.db` and `ProductEntry.json` from the public URLs into `data/` and verifies their SHA-256. |
+| `make reset` | Downloads `catalog.db` again, replacing the local one, so the database is back to its original state. Run it before a demo: `make run` changes the database. |
 | `make test` | Runs `go vet` and every test (unit and integration). Needs no network and no downloaded data; the real-data test runs only if `data/` exists. |
 | `make dry-run` | Runs the full import inside one transaction that is rolled back at the end, and writes the report. Shows what would happen without changing the database. |
 | `make run` | Runs the import for real: migrates the schema if needed, writes products and links, records an `ImportRun` and writes the report. Running it twice shows idempotency: the second run changes nothing. |
