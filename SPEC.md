@@ -30,8 +30,8 @@ The shopper must see each product **once**, with every seller's offer attached t
 
 | # | Finding | Evidence |
 |---|---|---|
-| 1 | `SellerProductId` is `INTEGER`, seller ids are UUID strings | schema |
-| 2 | 3 ids are not valid UUIDs | `ddddeee-…`, `09835342345-…`, `uddd0000-…` |
+| 1 | `SellerProductId` is `INTEGER`, but seller ids are strings | schema |
+| 2 | Seller ids have no single format: most look like UUIDs, some do not | `ddddeee-…`, `09835342345-…`, `uddd0000-…` |
 | 3 | The same id is used by different sellers for unrelated products | 13 ids |
 | 4 | The same seller sends the same id twice with different spellings | GardenStore `e5e5e5e5-…`: "Câmera Canon EOS R6" / "Camera Canon EOS R6" |
 | 5 | Double spaces in names | 60 entries, e.g. `Xbox  Series X` |
@@ -82,7 +82,7 @@ The shopper must see each product **once**, with every seller's offer attached t
    - Across runs: an existing pair goes through the pipeline again. Same product → nothing changes (idempotency). Another product → the link is **moved**, assuming the seller is correcting a previous mistake. A product left without links by the move is reported as **orphaned** and never deleted automatically.
    - Accepted risk: if the new message is the wrong one, the offer moves to the wrong product. Mitigation: re-processing the previous file moves it back (`ImportRun` records which file, with its hash).
    - Future work: update in place a product created by this seller and used only by it.
-3. **Ids are opaque.** Non-UUID ids are accepted with an `invalid_id_format` warning; only an empty id is rejected (`missing_id`). The id is the seller's SKU, the platform never interprets it, and external ids come in many formats.
+3. **Ids are opaque strings.** No format is validated or expected: the id is the seller's SKU, each seller codes SKUs its own way (numeric, alphanumeric, prefixed, UUID…), the platform never interprets it and the assessment does not require any format. Only an empty or missing id is rejected (`missing_id`), because without it there is no link.
 4. **Same seller, same product, different ids: both links are kept**, with a `same_product_multiple_ids` warning. A partly-1P/partly-3P store may sell the same product as own stock and consignment through the same seller account. The catalog stays duplicate-free; only the offer repeats, and that is reversible. Future work: an offer discriminator column (condition, fulfillment).
 5. **`SellerProduct` keeps the seller's last message and how the link was made:** `SellerProductName`, `SellerBrand`, `SellerCategory`, `MatchMethod` (`normalized` | `translated` | `new`), `MatchScore`, `CreatedAt`, `UpdatedAt`, `ImportRunId`. **The catalog is never changed by seller data.** History is one table, `ImportRun` (file path, SHA-256, timestamps, status, counters): to audit or re-process, the file is run again. No per-line log is persisted.
 6. **`Product` gets `NormalizedName` and `NormalizedBrand`**, backfilled by the migration, with `UNIQUE(NormalizedName, NormalizedBrand)` and an index on `NormalizedBrand`. The database itself refuses catalog duplicates, even with concurrent imports. The brand is `''`, not NULL, because NULLs never collide in a SQLite `UNIQUE`. If the normalization rule changes, the same function re-runs the backfill.
@@ -102,7 +102,7 @@ Each run prints a summary and writes `reports/run-<id>.json`:
 
 - counters: `created`, `linked`, `moved`, `unchanged`, `rejected`, `duplicate_in_batch`;
 - every rejection with line number and reason;
-- every warning with line number: `invalid_id_format`, `same_product_multiple_ids`, `possible_duplicate` (candidate id and score), `orphaned_product`.
+- every warning with line number: `same_product_multiple_ids`, `possible_duplicate` (candidate id and score), `orphaned_product`.
 
 ## 6. Interface
 
