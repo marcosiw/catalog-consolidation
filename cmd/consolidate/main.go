@@ -83,7 +83,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) (code int
 	}
 	defer s.Close()
 
-	im, err := ingest.New(s, ingest.Config{
+	ingestion, err := ingest.New(s, ingest.Config{
 		SimilarityThreshold: cfg.threshold,
 		BatchSize:           cfg.batchSize,
 		DryRun:              cfg.dryRun,
@@ -95,7 +95,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) (code int
 		return exitUsage
 	}
 
-	rep, runErr := im.Run(ctx, cfg.input, data)
+	rep, runErr := ingestion.Run(ctx, cfg.input, data)
 	// The report is written even when the run failed: it shows what the
 	// committed batches did.
 	rep.WriteSummary(stdout)
