@@ -5,8 +5,8 @@ DATA_URL   := https://engineering-hiring-process.s3.us-east-1.amazonaws.com
 DB         ?= data/catalog.db
 INPUT      ?= data/ProductEntry.json
 THRESHOLD  ?= 0.6
-GLOSSARY   ?= glossary/pt-en.json
-EXCLUSIONS ?= rules/exclusion-list.json
+GLOSSARY   ?= config/glossary-pt-en.json
+EXCLUSIONS ?= config/exclusion-list.json
 REPORT_DIR ?= reports
 BATCH_SIZE ?= 500
 
@@ -29,12 +29,12 @@ data: ## Download the provided database and seller file, and verify their checks
 	@mkdir -p data
 	curl -sSfo data/catalog.db $(DATA_URL)/catalog.db
 	curl -sSfo data/ProductEntry.json $(DATA_URL)/ProductEntry.json
-	sha256sum -c checksums.sha256
+	sha256sum -c config/checksums.sha256
 
 reset: ## Download the database again, back to its original state (make run changes it)
 	@mkdir -p data
 	curl -sSfo data/catalog.db $(DATA_URL)/catalog.db
-	grep 'data/catalog.db' checksums.sha256 | sha256sum -c -
+	grep 'data/catalog.db' config/checksums.sha256 | sha256sum -c -
 
 test: ## Run go vet and every test; no network or downloaded data needed
 	go vet ./...

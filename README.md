@@ -70,8 +70,8 @@ internal/rules/        exclusion list
 internal/store/        SQLite access and migrations
 internal/ingest/       the pipeline: validation, distinct, matching, links, batches
 internal/report/       report model, JSON file and summary
-internal/storetest/    test helper: databases with the original schema
-glossary/, rules/      configuration files, editable without code changes
+internal/testutil/     test helper: databases with the original schema
+config/                files editable without code changes: glossary, exclusion list, data checksums
 ```
 
 ## Tests

@@ -128,8 +128,8 @@ go run ./cmd/consolidate \
   --db data/catalog.db \
   --input data/ProductEntry.json \
   --similarity-threshold 0.6 \
-  --glossary glossary/pt-en.json \
-  --exclusion-list rules/exclusion-list.json \
+  --glossary config/glossary-pt-en.json \
+  --exclusion-list config/exclusion-list.json \
   --report-dir reports \
   --batch-size 500 \
   --dry-run
@@ -140,8 +140,8 @@ go run ./cmd/consolidate \
 | `--db` | `data/catalog.db` | SQLite database to import into. Migrated automatically on first use. |
 | `--input` | `data/ProductEntry.json` | JSON array of seller entries (`Id`, `SellerName`, `Name`, `Brand`, `Category`). |
 | `--similarity-threshold` | `0.6` | Minimum token Jaccard score for a same-brand product to become a candidate for the translation check (decision 7). |
-| `--glossary` | `glossary/pt-en.json` | Word-by-word translation glossary used to confirm candidates (stage 3). |
-| `--exclusion-list` | `rules/exclusion-list.json` | Terms that reject an entry when contained in its name or brand (decision 10). |
+| `--glossary` | `config/glossary-pt-en.json` | Word-by-word translation glossary used to confirm candidates (stage 3). |
+| `--exclusion-list` | `config/exclusion-list.json` | Terms that reject an entry when contained in its name or brand (decision 10). |
 | `--report-dir` | `reports` | Directory where `run-<id>.json` is written. |
 | `--batch-size` | `500` | Entries committed per transaction (decision 9). Ignored with `--dry-run`. |
 | `--dry-run` | off | Roll everything back at the end; the report is still written. Omit it to import for real. |

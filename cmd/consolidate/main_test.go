@@ -39,8 +39,8 @@ func (c cli) run(t *testing.T, extra ...string) (int, string, string) {
 	args := append([]string{
 		"-db", c.db,
 		"-input", filepath.Join("testdata", "entries.json"),
-		"-glossary", filepath.Join("..", "..", "glossary", "pt-en.json"),
-		"-exclusion-list", filepath.Join("..", "..", "rules", "exclusion-list.json"),
+		"-glossary", filepath.Join("..", "..", "config", "glossary-pt-en.json"),
+		"-exclusion-list", filepath.Join("..", "..", "config", "exclusion-list.json"),
 		"-report-dir", c.reports,
 	}, extra...)
 	var stdout, stderr bytes.Buffer

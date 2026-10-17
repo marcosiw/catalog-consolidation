@@ -40,7 +40,7 @@ func TestNewExclusionList_RejectsEmptyTerm(t *testing.T) {
 }
 
 func TestLoadExclusionList_ShippedFileExcludesTestProduct(t *testing.T) {
-	l, err := LoadExclusionList(filepath.Join("..", "..", "rules", "exclusion-list.json"))
+	l, err := LoadExclusionList(filepath.Join("..", "..", "config", "exclusion-list.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

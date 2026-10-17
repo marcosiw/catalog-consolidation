@@ -30,11 +30,11 @@ func TestImporter_Run_ProvidedData(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	glossary, err := translate.LoadGlossary(filepath.Join(root, "glossary", "pt-en.json"))
+	glossary, err := translate.LoadGlossary(filepath.Join(root, "config", "glossary-pt-en.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	exclusions, err := rules.LoadExclusionList(filepath.Join(root, "rules", "exclusion-list.json"))
+	exclusions, err := rules.LoadExclusionList(filepath.Join(root, "config", "exclusion-list.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

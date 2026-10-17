@@ -37,7 +37,7 @@ func TestNewGlossary_RejectsMultiWordSource(t *testing.T) {
 }
 
 func TestLoadGlossary_ShippedFileTranslatesRouter(t *testing.T) {
-	g, err := LoadGlossary(filepath.Join("..", "..", "glossary", "pt-en.json"))
+	g, err := LoadGlossary(filepath.Join("..", "..", "config", "glossary-pt-en.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
