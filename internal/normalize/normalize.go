@@ -16,7 +16,8 @@ import (
 //   - accents are removed (NFKD + drop combining marks): "Câmera" → "camera";
 //   - letters are lower-cased: "BLACK+DECKER" → "black decker";
 //   - apostrophes and double quotes are deleted, not replaced by a space,
-//     so "Levi's" → "levis" and `12.9"` / "12.9”" → "12 9";
+//     so "Levi's" → "levis" and 12.9 followed by a double quote or by two
+//     apostrophes → "12 9";
 //   - every other run of non-alphanumeric characters becomes a single space,
 //     which also collapses repeated spaces: "Xbox  Series X" → "xbox series x";
 //   - leading and trailing spaces are trimmed.
