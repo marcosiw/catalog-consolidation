@@ -83,7 +83,7 @@ The shopper must see each product **once**, with every seller's offer attached t
    - Accepted risk: if the new message is the wrong one, the offer moves to the wrong product. Mitigation: re-processing the previous file moves it back (`ImportRun` records which file, with its hash).
    - Future work: update in place a product created by this seller and used only by it.
 3. **Ids are opaque strings.** No format is validated or expected: the id is the seller's SKU, each seller codes SKUs its own way (numeric, alphanumeric, prefixed, UUID…), the platform never interprets it and the assessment does not require any format. Only an empty or missing id is rejected (`missing_id`), because without it there is no link.
-4. **Same seller, same product, different ids: both links are kept**, with a `same_product_multiple_ids` warning. A partly-1P/partly-3P store may sell the same product as own stock and consignment through the same seller account. The catalog stays duplicate-free; only the offer repeats, and that is reversible. Future work: an offer discriminator column (condition, fulfillment).
+4. **Same seller, same product, different ids: both links are kept**, with a `same_product_multiple_ids` warning. A partly-1P/partly-3P store may sell the same product as own stock and consignment through the same seller account. The catalog stays duplicate-free; only the offer repeats, and that is reversible. 
 5. **`SellerProduct` keeps the seller's last message and how the link was made:** `SellerProductName`, `SellerBrand`, `SellerCategory`, `MatchMethod` (`normalized` | `translated` | `new`), `MatchScore`, `CreatedAt`, `UpdatedAt`, `ImportRunId`. **The catalog is never changed by seller data.** History is one table, `ImportRun` (file path, SHA-256, timestamps, status, counters): to audit or re-process, the file is run again. No per-line log is persisted.
 6. **`Product` gets `NormalizedName` and `NormalizedBrand`**, backfilled by the migration, with `UNIQUE(NormalizedName, NormalizedBrand)` and an index on `NormalizedBrand`. The database itself refuses catalog duplicates, even with concurrent imports. The brand is `''`, not NULL, because NULLs never collide in a SQLite `UNIQUE`. If the normalization rule changes, the same function re-runs the backfill.
 7. **Similarity is token Jaccard, threshold 0.6, configurable.** Measured: the two translations score 0.67; the most similar pair of *different* same-brand products in the catalog scores 0.50 (`Tennis Racket Adult` × `Tennis Racket Bag`). Character-level similarity was rejected: `Colander Stainless Steel` × `Ladle Stainless Steel` scores 0.89 against 0.91/0.96 for the translations. Caveats: calibrated on only two positives; it does not catch typos inside a word.
@@ -106,15 +106,43 @@ Each run prints a summary and writes `reports/run-<id>.json`:
 
 ## 6. Interface
 
+`make` is the main way to run the project: every step a reviewer needs is one target, with no flags to remember. Each target only wraps the commands below, so nothing is hidden.
+
+| Target | What it does |
+|---|---|
+| `make data` | Downloads `catalog.db` and `ProductEntry.json` from the public URLs into `data/`, verifies their SHA-256 and keeps the database as `data/catalog.original.db`, the pristine copy that is never written. |
+| `make reset` | Restores `data/catalog.db` from `data/catalog.original.db`. Run it before a demo: `make run` changes the database. |
+| `make test` | Runs `go vet` and every test (unit and integration). Needs no network and no downloaded data; the real-data test runs only if `data/` exists. |
+| `make dry-run` | Runs the full import inside one transaction that is rolled back at the end, and writes the report. Shows what would happen without changing the database. |
+| `make run` | Runs the import for real: migrates the schema if needed, writes products and links, records an `ImportRun` and writes the report. Running it twice shows idempotency: the second run changes nothing. |
+| `make inspect` | Prints a few ready-made queries on the result: links by match method, products created by the import, warnings of the last report and the latest `ImportRun` rows. |
+
+The Makefile variables (`DB`, `INPUT`, `THRESHOLD`, `BATCH_SIZE`…) can be overridden, e.g. `make run THRESHOLD=0.7`.
+
+Without `make`, the full command is:
+
 ```bash
 go run ./cmd/consolidate \
-  --db data/catalog.db --input data/ProductEntry.json \
-  --similarity-threshold 0.6 --glossary glossary/pt-en.json \
+  --db data/catalog.db \
+  --input data/ProductEntry.json \
+  --similarity-threshold 0.6 \
+  --glossary glossary/pt-en.json \
   --exclusion-list rules/exclusion-list.json \
-  --report-dir reports --batch-size 500 [--dry-run]
+  --report-dir reports \
+  --batch-size 500 \
+  --dry-run
 ```
 
-`make data` (download + checksum), `make test`, `make dry-run`, `make run`, `make reset`, `make inspect`.
+| Flag | Default | Meaning |
+|---|---|---|
+| `--db` | `data/catalog.db` | SQLite database to import into. Migrated automatically on first use. |
+| `--input` | `data/ProductEntry.json` | JSON array of seller entries (`Id`, `SellerName`, `Name`, `Brand`, `Category`). |
+| `--similarity-threshold` | `0.6` | Minimum token Jaccard score for a same-brand product to become a candidate for the translation check (decision 7). |
+| `--glossary` | `glossary/pt-en.json` | Word-by-word translation glossary used to confirm candidates (stage 3). |
+| `--exclusion-list` | `rules/exclusion-list.json` | Terms that reject an entry when contained in its name or brand (decision 10). |
+| `--report-dir` | `reports` | Directory where `run-<id>.json` is written. |
+| `--batch-size` | `500` | Entries committed per transaction (decision 9). Ignored with `--dry-run`. |
+| `--dry-run` | off | Roll everything back at the end; the report is still written. Omit it to import for real. |
 
 ## 7. Tests
 
@@ -127,6 +155,6 @@ go run ./cmd/consolidate \
 - LLM or translation API behind the `Translator` interface (today: a small PT→EN glossary).
 - A review queue for `possible_duplicate`.
 - Combined similarity metric (tokens + characters) to catch typos.
-- `Seller` table; offer discriminator.
+- `Seller` table.
 - Per-line import log.
 - Allow-list and presence rules (e.g. "category X requires brand").
