@@ -201,7 +201,7 @@ func (im *Importer) process(ctx context.Context, tx *store.Tx, runID int64, e En
 	}
 
 	// Stages 1 to 3.
-	match, err := im.resolve(ctx, tx, name, brand)
+	match, err := im.matchProduct(ctx, tx, name, brand)
 	if err != nil {
 		return report.Entry{}, err
 	}
@@ -244,7 +244,7 @@ func (im *Importer) process(ctx context.Context, tx *store.Tx, runID int64, e En
 // link records the seller's item: a new link, nothing (same product), or a
 // moved link when the seller's last message points to another product
 // (SPEC decision 2).
-func (im *Importer) link(ctx context.Context, tx *store.Tx, runID int64, e Entry, productID int64, match resolution, res *report.Entry) error {
+func (im *Importer) link(ctx context.Context, tx *store.Tx, runID int64, e Entry, productID int64, match productMatch, res *report.Entry) error {
 	now := im.cfg.Now().UTC()
 	l := store.Link{
 		SellerName:        e.SellerName,

@@ -9,15 +9,15 @@ import (
 	"github.com/marcosiw/catalog-consolidation/internal/store"
 )
 
-// resolution is the catalog product an entry belongs to.
-type resolution struct {
+// productMatch is the catalog product an entry belongs to, and how it was found.
+type productMatch struct {
 	productID int64 // 0 when the product must be created
 	method    store.MatchMethod
 	score     *float64
 	warnings  []report.Warning
 }
 
-// resolve finds the catalog product of an entry (SPEC section 3):
+// matchProduct finds the catalog product of an entry (SPEC section 3):
 //
 //  1. the normalized key exists in the catalog → normalized;
 //  2. otherwise, same-brand products whose token Jaccard reaches the
@@ -26,35 +26,35 @@ type resolution struct {
 //     translated; otherwise → new product and a possible_duplicate warning.
 //
 // Similarity alone never links: two independent signals must agree.
-func (im *Importer) resolve(ctx context.Context, tx *store.Tx, name, brand string) (resolution, error) {
+func (im *Importer) matchProduct(ctx context.Context, tx *store.Tx, name, brand string) (productMatch, error) {
 	p, found, err := tx.FindProductByKey(ctx, name, brand)
 	if err != nil {
-		return resolution{}, err
+		return productMatch{}, err
 	}
 	if found {
-		return resolution{productID: p.ID, method: store.MatchNormalized, score: ptr(1.0)}, nil
+		return productMatch{productID: p.ID, method: store.MatchNormalized, score: ptr(1.0)}, nil
 	}
 
 	// The 119 unbranded products are too heterogeneous to be a block.
 	if brand == "" {
-		return resolution{method: store.MatchNew}, nil
+		return productMatch{method: store.MatchNew}, nil
 	}
 	candidates, best, err := im.candidates(ctx, tx, name, brand)
 	if err != nil {
-		return resolution{}, err
+		return productMatch{}, err
 	}
 	if len(candidates) == 0 {
-		return resolution{method: store.MatchNew}, nil
+		return productMatch{method: store.MatchNew}, nil
 	}
 
 	translated := im.cfg.Translator.Translate(name)
 	for _, c := range candidates {
 		if translated == c.product.NormalizedName {
-			return resolution{productID: c.product.ID, method: store.MatchTranslated, score: ptr(c.score)}, nil
+			return productMatch{productID: c.product.ID, method: store.MatchTranslated, score: ptr(c.score)}, nil
 		}
 	}
 
-	return resolution{
+	return productMatch{
 		method: store.MatchNew,
 		warnings: []report.Warning{{
 			Code: report.WarningPossibleDuplicate,
