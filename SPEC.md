@@ -60,15 +60,16 @@ The shopper must see each product **once**, with every seller's offer attached t
 ## 3. Pipeline
 
 ```
-0.  distinct    by (SellerName, Id) over the whole file, keeping the LAST occurrence
-0b. exclusion   Name or Brand contains a term of the exclusion list?      yes → reject (exclusion_list)
+0a. validate    empty Id, SellerName or Name?                              yes → reject (missing_*)
+0b. distinct    by (SellerName, Id) over the whole file, keeping the LAST occurrence
+0c. exclusion   Name or Brand contains a term of the exclusion list?      yes → reject (exclusion_list)
 1.  normalize   (NormalizedName, NormalizedBrand) exists in the catalog?   yes → link   (normalized)
 2.  similarity  same-brand candidates with token Jaccard ≥ threshold?      no  → new product
 3.  translate   translated name == NormalizedName of one of them?          yes → link   (translated)
                                                                            no  → new product + possible_duplicate warning
 ```
 
-- **Normalization** (both sides): Unicode NFKD, drop combining marks (accents), lower case, remove `'` and `"` (so `Levi's` → `levis` and `12.9"` → `12.9`), every other non-alphanumeric run becomes one space, trim. A NULL brand normalizes to `''`.
+- **Normalization** (both sides): Unicode NFKD (`golang.org/x/text`, the only dependency besides the SQLite driver), drop combining marks (accents), lower case, remove `'` and `"` (so `Levi's` → `levis` and `12.9"` → `12.9`), every other non-alphanumeric run becomes one space, trim. A NULL brand normalizes to `''`.
 - **The duplicate key is name + brand. Category is not part of it**: it is classification, not identity, and each seller has its own taxonomy (finding 8).
 - **Similarity** never decides a link on its own. It selects candidates (blocking by brand) and flags the grey zone. It is skipped when the brand is empty: the 119 unbranded products are too heterogeneous to be a block.
 - **Translation** confirms a candidate only by **exact** equality. Two independent signals must agree. This is what protects against merging `Galaxy S24 Ultra` with `Galaxy S24 Plus`: similar, same brand, but no translation makes them equal.
@@ -78,7 +79,7 @@ The shopper must see each product **once**, with every seller's offer attached t
 
 1. **`SellerProductId` becomes `TEXT`** (SQLite has no `ALTER COLUMN`: the table is rebuilt; it is empty). **`UNIQUE(SellerName, SellerProductId)`**: ids are only unique per seller (finding 3). A `Seller` table is future work.
 2. **Re-sent `(SellerName, Id)`: last wins.**
-   - In the file: the distinct keeps the last occurrence; the others are reported as `duplicate_in_batch` with their line numbers.
+   - In the file: the distinct keeps the last occurrence; the others are reported as `duplicate_in_batch` with their position in the input array.
    - Across runs: an existing pair goes through the pipeline again. Same product → nothing changes (idempotency). Another product → the link is **moved**, assuming the seller is correcting a previous mistake. A product left without links by the move is reported as **orphaned** and never deleted automatically.
    - Accepted risk: if the new message is the wrong one, the offer moves to the wrong product. Mitigation: re-processing the previous file moves it back (`ImportRun` records which file, with its hash).
    - Future work: update in place a product created by this seller and used only by it.
@@ -93,7 +94,7 @@ The shopper must see each product **once**, with every seller's offer attached t
    - Data errors reject the entry and the run goes on (`missing_id`, `missing_seller_name`, `missing_name` — also when the name has no letter or digit; an empty brand is allowed). System errors (malformed JSON, database unavailable, unexpected constraint violation) roll back the batch, mark the run `failed` and exit non-zero.
    - Migrations are versioned with `PRAGMA user_version`, idempotent and applied automatically at start. `PRAGMA foreign_keys = ON` on every connection.
    - `--dry-run` runs everything in a single transaction that is rolled back at the end (batch size ignored) and still writes the report.
-10. **Exclusion list** (stage 0b): a file of forbidden terms that grows without code changes. If `Name` or `Brand` contains a term anywhere, the entry is rejected (`exclusion_list`, with the matched term). Comparison is case-insensitive with collapsed spaces, **keeping punctuation**. Initial terms: `Security Test Product`, `SELECT 1;`. This is **catalog content policy** (sellers pushing test items to production), not a security control. Terms must be specific: `test` alone would match `Contest`.
+10. **Exclusion list** (stage 0c): a file of forbidden terms that grows without code changes. If `Name` or `Brand` contains a term anywhere, the entry is rejected (`exclusion_list`, with the matched term). Comparison is case-insensitive with collapsed spaces, **keeping punctuation**. Initial terms: `Security Test Product`, `SELECT 1;`. This is **catalog content policy** (sellers pushing test items to production), not a security control. Terms must be specific: `test` alone would match `Contest`.
 11. **Conventions.** No code conventions are defined in the guideline, so this follows standard Go (`gofmt`, `go vet`, `cmd/` + `internal/`, table-driven tests, wrapped errors). Driver `modernc.org/sqlite` (pure Go, no CGO needed).
 
 ## 5. Report
@@ -101,8 +102,9 @@ The shopper must see each product **once**, with every seller's offer attached t
 Each run prints a summary and writes `reports/run-<id>.json`:
 
 - counters: `created`, `linked`, `moved`, `unchanged`, `rejected`, `duplicate_in_batch`;
-- every rejection with line number and reason;
-- every warning with line number: `same_product_multiple_ids`, `possible_duplicate` (candidate id and score), `orphaned_product`.
+- every entry with its position in the input array, outcome, product and match method;
+- every rejection with its reason;
+- every warning: `same_product_multiple_ids`, `possible_duplicate` (candidate id and score), `orphaned_product`.
 
 ## 6. Interface
 

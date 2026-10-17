@@ -6,7 +6,7 @@ A command-line tool that imports products sent by marketplace sellers into a SQL
 
 ## Quick start
 
-Requirements: Go 1.27 (older Go versions download it automatically), `make`, `curl`, `sha256sum`, and `sqlite3` for `make inspect`.
+Requirements: Go 1.27 (any Go from 1.21 on downloads it automatically), `make`, `curl`, `sha256sum`, and `sqlite3` for `make inspect`.
 
 ```bash
 make            # list the targets
@@ -36,8 +36,9 @@ A second run of the same file reports 267 `unchanged` and writes nothing. These 
 ## How it works
 
 ```
-0.  distinct    by (SellerName, Id) over the whole file, keeping the LAST occurrence
-0b. exclusion   Name or Brand contains a term of the exclusion list?      yes → reject
+0a. validate    empty Id, SellerName or Name?                             yes → reject
+0b. distinct    by (SellerName, Id) over the whole file, keeping the LAST occurrence
+0c. exclusion   Name or Brand contains a term of the exclusion list?      yes → reject
 1.  normalize   (name, brand) normalized key exists in the catalog?       yes → link (normalized)
 2.  similarity  same-brand candidates with token Jaccard ≥ 0.6?           no  → new product
 3.  translate   translated name equals one candidate exactly?             yes → link (translated)

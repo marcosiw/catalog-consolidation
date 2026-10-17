@@ -23,7 +23,7 @@ type Config struct {
 	BatchSize           int                  // entries per transaction (decision 9)
 	DryRun              bool                 // roll everything back at the end
 	Translator          translate.Translator // confirms candidates (stage 3)
-	Exclusions          *rules.ExclusionList // content policy (stage 0b)
+	Exclusions          *rules.ExclusionList // content policy (stage 0c)
 	Now                 func() time.Time     // clock, replaceable in tests
 }
 
@@ -226,7 +226,7 @@ func (im *Importer) updateRun(ctx context.Context, rep *report.Report) error {
 // process runs one valid, distinct entry through the pipeline. Data problems
 // become a rejection in the result; only system errors are returned.
 func (im *Importer) process(ctx context.Context, tx *store.Tx, runID int64, e Entry) (report.Entry, error) {
-	// Stage 0b: content policy, on the text as the seller sent it.
+	// Stage 0c: content policy, on the text as the seller sent it.
 	if term, hit := im.cfg.Exclusions.Match(e.Name, value(e.Brand)); hit {
 		return reportEntry(e, report.OutcomeRejected, report.ReasonExclusionList, fmt.Sprintf("contains %q", term)), nil
 	}
