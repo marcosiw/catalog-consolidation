@@ -468,3 +468,34 @@ func TestNew_RejectsInvalidConfig(t *testing.T) {
 		})
 	}
 }
+
+type panickingTranslator struct{}
+
+func (panickingTranslator) Translate(string) string { panic("translator bug") }
+
+func TestImporter_Run_MarksRunFailedAndRepanicsOnPanic(t *testing.T) {
+	f := newFixture(t, catalog...)
+	cfg := defaultConfig(t)
+	cfg.Translator = panickingTranslator{}
+	im, err := New(f.store, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	func() {
+		defer func() {
+			if recover() == nil {
+				t.Error("Run did not propagate the panic")
+			}
+		}()
+		im.Run(context.Background(), "entries.json", entriesJSON(t,
+			in{"a1", "S1", "Roteador WiFi 6 TP-Link", "TP-Link", nil}, // reaches translation
+		))
+	}()
+	var status string
+	if err := f.db.QueryRow(`SELECT Status FROM ImportRun`).Scan(&status); err != nil {
+		t.Fatal(err)
+	}
+	if status != "failed" {
+		t.Errorf("ImportRun status = %q, want failed", status)
+	}
+}

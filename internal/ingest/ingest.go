@@ -124,7 +124,18 @@ func (im *Importer) runDry(ctx context.Context, rep *report.Report, data []byte)
 	return nil // deferred Rollback discards everything
 }
 
-func (im *Importer) runBatches(ctx context.Context, rep *report.Report, data []byte) error {
+func (im *Importer) runBatches(ctx context.Context, rep *report.Report, data []byte) (err error) {
+	// A panic must not leave the run as "running": record it as failed and
+	// let the panic go on to the caller, which owns the process.
+	defer func() {
+		if p := recover(); p != nil {
+			if rep.RunID != 0 {
+				im.fail(ctx, rep, fmt.Errorf("panic: %v", p))
+			}
+			panic(p)
+		}
+	}()
+
 	tx, err := im.store.Begin(ctx)
 	if err != nil {
 		return err
