@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestExclusionListMatch(t *testing.T) {
+func TestExclusionList_Match(t *testing.T) {
 	l, err := NewExclusionList([]string{"Security Test Product", "SELECT 1;"})
 	if err != nil {
 		t.Fatal(err)
@@ -16,12 +16,12 @@ func TestExclusionListMatch(t *testing.T) {
 		wantTerm string
 		wantHit  bool
 	}{
-		{"finding 11: test product name", []string{"Security Test Product", "TestBrand"}, "Security Test Product", true},
-		{"finding 11: injection payload in brand", []string{"Anything", "TestBrand'; SELECT 1; --"}, "SELECT 1;", true},
-		{"case and repeated spaces ignored", []string{"x", "select  1;"}, "SELECT 1;", true},
-		{"punctuation is kept", []string{"Select 1 Kit", ""}, "", false},
-		{"apostrophes are fine", []string{"Belt Leather Reversible", "Levi's"}, "", false},
-		{"contained anywhere", []string{"New Security Test Product v2", ""}, "Security Test Product", true},
+		{"rejects_known_test_product_name", []string{"Security Test Product", "TestBrand"}, "Security Test Product", true},
+		{"rejects_listed_term_inside_brand", []string{"Anything", "TestBrand'; SELECT 1; --"}, "SELECT 1;", true},
+		{"ignores_case_and_repeated_spaces", []string{"x", "select  1;"}, "SELECT 1;", true},
+		{"requires_punctuation_of_the_term", []string{"Select 1 Kit", ""}, "", false},
+		{"accepts_brand_with_apostrophe", []string{"Belt Leather Reversible", "Levi's"}, "", false},
+		{"matches_term_anywhere_in_the_text", []string{"New Security Test Product v2", ""}, "Security Test Product", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -33,18 +33,18 @@ func TestExclusionListMatch(t *testing.T) {
 	}
 }
 
-func TestNewExclusionListRejectsEmptyTerm(t *testing.T) {
+func TestNewExclusionList_RejectsEmptyTerm(t *testing.T) {
 	if _, err := NewExclusionList([]string{"  "}); err == nil {
 		t.Error("want error for an empty term")
 	}
 }
 
-func TestShippedExclusionListLoads(t *testing.T) {
+func TestLoadExclusionList_ShippedFileExcludesTestProduct(t *testing.T) {
 	l, err := LoadExclusionList(filepath.Join("..", "..", "rules", "exclusion-list.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, hit := l.Match("Security Test Product"); !hit {
-		t.Error("shipped list should exclude the known test product")
+	if term, hit := l.Match("Security Test Product"); !hit {
+		t.Errorf("Match(%q) = (%q, %v), want a hit", "Security Test Product", term, hit)
 	}
 }

@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestGlossaryTranslate(t *testing.T) {
+func TestGlossary_Translate(t *testing.T) {
 	g, err := NewGlossary(map[string]string{"Roteador": "Router", "processador": "processor"})
 	if err != nil {
 		t.Fatal(err)
@@ -15,11 +15,11 @@ func TestGlossaryTranslate(t *testing.T) {
 		in   string
 		want string
 	}{
-		{"finding 9: router", "roteador wifi 6 tp link", "router wifi 6 tp link"},
-		{"finding 9: processor", "processador amd ryzen 9 7950x", "processor amd ryzen 9 7950x"},
-		{"nothing to translate", "router wifi 6 tp link", "router wifi 6 tp link"},
-		{"model variants are untouched", "galaxy s24 ultra", "galaxy s24 ultra"},
-		{"empty", "", ""},
+		{"translates_portuguese_first_word", "roteador wifi 6 tp link", "router wifi 6 tp link"},
+		{"translates_another_portuguese_first_word", "processador amd ryzen 9 7950x", "processor amd ryzen 9 7950x"},
+		{"keeps_english_name_unchanged", "router wifi 6 tp link", "router wifi 6 tp link"},
+		{"keeps_model_variant_unchanged", "galaxy s24 ultra", "galaxy s24 ultra"},
+		{"keeps_empty_input_empty", "", ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -30,18 +30,19 @@ func TestGlossaryTranslate(t *testing.T) {
 	}
 }
 
-func TestNewGlossaryRejectsMultiWordSource(t *testing.T) {
+func TestNewGlossary_RejectsMultiWordSource(t *testing.T) {
 	if _, err := NewGlossary(map[string]string{"fone de ouvido": "headphones"}); err == nil {
 		t.Error("want error for a multi-word source")
 	}
 }
 
-func TestShippedGlossaryLoads(t *testing.T) {
+func TestLoadGlossary_ShippedFileTranslatesRouter(t *testing.T) {
 	g, err := LoadGlossary(filepath.Join("..", "..", "glossary", "pt-en.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := g.Translate("roteador wifi 6 tp link"); got != "router wifi 6 tp link" {
-		t.Errorf("shipped glossary: got %q", got)
+	in, want := "roteador wifi 6 tp link", "router wifi 6 tp link"
+	if got := g.Translate(in); got != want {
+		t.Errorf("Translate(%q) = %q, want %q", in, got, want)
 	}
 }

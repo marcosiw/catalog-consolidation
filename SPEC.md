@@ -146,7 +146,7 @@ go run ./cmd/consolidate \
 
 ## 7. Tests
 
-- **Unit**: one test per finding of section 2.
+- **Unit**: every finding of section 2 is covered by at least one test, named after the expected behaviour (see `AGENTS.md`).
 - **Integration** with a versioned fixture (`testdata/`): a database built from the original DDL plus a small seed (so the migration is exercised), and a 2-entry file — one matches an existing product, one becomes a new product. Run twice: the second run changes nothing.
 - **Real data** (skipped when `data/` is absent): checks the funnel numbers.
 

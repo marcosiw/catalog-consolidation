@@ -5,7 +5,7 @@ Read `SPEC.md` before any change. It is the source of truth; if a change contrad
 ## Rules
 
 - Never build SQL by concatenating data. Every statement uses `?` parameters, including migrations and tests.
-- Every new behaviour comes with a test. Each finding in `SPEC.md` section 2 has a test that names it.
+- Every new behaviour comes with a test. Every finding in `SPEC.md` section 2 is covered by at least one test.
 - Never merge products on a single signal. Matching rules must follow `SPEC.md` section 3.
 - The catalog (`Product`) is never updated from seller data; only `SellerProduct` stores what the seller sent.
 - Keep functions in `internal/normalize` and `internal/similarity` pure.
@@ -18,6 +18,14 @@ Read `SPEC.md` before any change. It is the source of truth; if a change contrad
 - SQLite driver: `modernc.org/sqlite` (no CGO).
 - English for code, comments, docs and commit messages.
 - Small commits, one slice of the SPEC each, tests included.
+
+## Test naming
+
+Test names describe the expected behaviour, never the problem that motivated it, so a failure reads as a sentence and can be found by copying it.
+
+- Test functions: `Test<Func>`, `Test<Type>_<Method>`, or `Test<Func>_<Scenario>` for a specific scenario (`TestText`, `TestGlossary_Translate`, `TestJaccard_DefaultThresholdSeparatesMeasuredCases`).
+- Subtests (`t.Run`): `snake_case` verb phrases describing the behaviour (`removes_accents`, `deletes_apostrophe_instead_of_spacing_it`). Go turns spaces into `_` in the output, so writing them in `snake_case` keeps the failure output identical to the source: `grep -rn <name>` finds the case.
+- Failure messages: `Func(input) = got, want expected`, got before want.
 
 ## Commits and versions
 
