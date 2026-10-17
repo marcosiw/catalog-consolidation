@@ -81,7 +81,7 @@ func defaultConfig(t *testing.T) Config {
 	clock := time.Date(2026, 10, 17, 12, 0, 0, 0, time.UTC)
 	return Config{
 		SimilarityThreshold: 0.6,
-		BatchSize:           500,
+		BatchSize:           100,
 		Translator:          g,
 		Exclusions:          ex,
 		Now:                 func() time.Time { clock = clock.Add(time.Second); return clock },

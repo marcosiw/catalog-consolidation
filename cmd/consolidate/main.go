@@ -136,7 +136,7 @@ func parseFlags(args []string, stderr io.Writer) (config, error) {
 	fs.StringVar(&c.glossary, "glossary", "config/glossary-pt-en.json", "word-by-word translation glossary that confirms candidates")
 	fs.StringVar(&c.exclusionList, "exclusion-list", "config/exclusion-list.json", "terms that reject an entry when contained in its name or brand")
 	fs.StringVar(&c.reportDir, "report-dir", "reports", "directory where the JSON report is written")
-	fs.IntVar(&c.batchSize, "batch-size", 500, "entries committed per transaction; ignored with -dry-run")
+	fs.IntVar(&c.batchSize, "batch-size", 100, "entries committed per transaction; ignored with -dry-run")
 	fs.BoolVar(&c.dryRun, "dry-run", false, "roll everything back at the end; the report is still written")
 	if err := fs.Parse(args); err != nil {
 		return config{}, err

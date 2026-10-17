@@ -8,7 +8,7 @@ THRESHOLD  ?= 0.6
 GLOSSARY   ?= config/glossary-pt-en.json
 EXCLUSIONS ?= config/exclusion-list.json
 REPORT_DIR ?= reports
-BATCH_SIZE ?= 500
+BATCH_SIZE ?= 100
 
 CONSOLIDATE = go run ./cmd/consolidate \
 	-db $(DB) \

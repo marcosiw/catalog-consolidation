@@ -39,7 +39,7 @@ func TestImporter_Run_ProvidedData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	im, err := New(s, Config{SimilarityThreshold: 0.6, BatchSize: 500, Translator: glossary, Exclusions: exclusions})
+	im, err := New(s, Config{SimilarityThreshold: 0.6, BatchSize: 100, Translator: glossary, Exclusions: exclusions})
 	if err != nil {
 		t.Fatal(err)
 	}

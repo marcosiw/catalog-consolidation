@@ -91,7 +91,7 @@ The shopper must see each product **once**, with every seller's offer attached t
 8. **The SQL injection entry is ordinary data.** Security lives in the data access layer: **every statement is parameterized**, including migrations. A test proves the brand is stored literally. Filtering characters was rejected: it would break legitimate brands (`Levi's`, `Black+Decker`, `AT&T`) and protects nothing that parameterization does not.
 9. **Execution.**
    - **Batches bound the transaction, streaming bounds the memory.** These are two different limits:
-     - **Transaction:** 500 entries per transaction (configurable). SQLite has a single writer, so a long transaction would lock the database and lose everything if it failed at the end. `ImportRun` is written first (`running`), counters are updated per committed batch, and it ends as `completed` or `failed`. A failed run is recovered by running the file again — safe because of idempotency and last-wins.
+     - **Transaction:** 100 entries per transaction (configurable). SQLite has a single writer, so a long transaction would lock the database and lose everything if it failed at the end. `ImportRun` is written first (`running`), counters are updated per committed batch, and it ends as `completed` or `failed`. A failed run is recovered by running the file again — safe because of idempotency and last-wins.
      - **Memory:** the file is never loaded whole. It is streamed **twice**, one entry at a time. The first pass computes the SHA-256 and, for each `(SellerName, Id)`, the position of its last occurrence; that is all the whole-file distinct needs. The second pass imports, and an entry whose position is not the last of its key is reported as `duplicate_in_batch`. Memory grows with the number of distinct seller items (tens of bytes each), not with the size of the entries. The cost is reading the file twice.
      - If the file changes between the two passes (its hash differs), the run fails.
    - Data errors reject the entry and the run goes on (`missing_id`, `missing_seller_name`, `missing_name` — also when the name has no letter or digit; an empty brand is allowed). A malformed file is refused by the first pass, **before anything is written**: no run is recorded and no report is produced. Other system errors (database unavailable, unexpected constraint violation, file changed during the import) roll back the batch, mark the run `failed` and exit non-zero.
@@ -134,7 +134,7 @@ go run ./cmd/consolidate \
   --glossary config/glossary-pt-en.json \
   --exclusion-list config/exclusion-list.json \
   --report-dir reports \
-  --batch-size 500 \
+  --batch-size 100 \
   --dry-run
 ```
 
@@ -146,7 +146,7 @@ go run ./cmd/consolidate \
 | `--glossary` | `config/glossary-pt-en.json` | Word-by-word translation glossary used to confirm candidates (stage 3). |
 | `--exclusion-list` | `config/exclusion-list.json` | Terms that reject an entry when contained in its name or brand (decision 10). |
 | `--report-dir` | `reports` | Directory where `run-<id>.json` is written. |
-| `--batch-size` | `500` | Entries committed per transaction (decision 9). Ignored with `--dry-run`. |
+| `--batch-size` | `100` | Entries committed per transaction (decision 9). Ignored with `--dry-run`. |
 | `--dry-run` | off | Roll everything back at the end; the report is still written. Omit it to import for real. |
 
 Exit codes: `0` the import completed; `1` the import failed (the report shows what the committed batches did); `2` invalid usage or configuration; `3` internal error (a recovered panic, printed with its stack trace). Ctrl+C or SIGTERM cancel the import: the batch in progress is rolled back and the run is recorded as `failed`; a panic also records the run as `failed` before the process exits.
@@ -193,4 +193,4 @@ Asked here because the assessment is asynchronous; the answers I assumed are in 
 5. Which languages may sellers use, and is the catalog always in English? (Portuguese and English for now.)
 6. Is there a list of known sellers, or is `SellerName` all we get? (Only the name.)
 7. Which code conventions does the Guideline Document refer to? It defines none. (Standard Go conventions plus the ones in `AGENTS.md`.)
-8. Is the input always a single file per run, and how large can it get? (One file; batches of 500 keep transactions short.)
+8. Is the input always a single file per run, and how large can it get? (One file; batches of 100 keep transactions short.)
