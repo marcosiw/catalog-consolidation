@@ -101,7 +101,7 @@ Breaking any of them is a major change. The delivered version is `v0.1.0`; while
 
 ## How AI was used
 
-I worked with an AI coding agent (Claude Code) as a pair, spec first. The agent's instructions are in [`AGENTS.md`](AGENTS.md).
+I worked with an AI coding agent (Claude Code) as a pair, spec first. The agent's instructions are in [`AGENTS.md`](AGENTS.md), the single source for any agent: Codex and Cursor read it natively, and `CLAUDE.md`, `GEMINI.md` and `.github/copilot-instructions.md` point to it.
 
 **What the agent did:** explored the data with SQL and scripts, and measured the cases that drive the decisions. One example is the similarity of every same-brand pair in the catalog, which set the threshold and ruled out character-level similarity. It also laid out options and trade-offs for each ambiguity, wrote `SPEC.md` from the decisions taken, and implemented each slice with its tests.
 
