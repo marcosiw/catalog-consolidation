@@ -5,55 +5,11 @@ import (
 	"database/sql"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
+
+	"github.com/marcosiw/catalog-consolidation/internal/storetest"
 )
-
-type seedProduct struct {
-	name, brand, category any // nil means NULL
-}
-
-// newOriginalDB writes a database with the schema provided with the
-// assessment and the given products, and returns its path. It does not
-// migrate it, so tests exercise the real migration path.
-func newOriginalDB(t *testing.T, products ...seedProduct) string {
-	t.Helper()
-	path := filepath.Join(t.TempDir(), "catalog.db")
-	db, err := sql.Open("sqlite", "file:"+path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-	ddl, err := os.ReadFile(filepath.Join("testdata", "original_schema.sql"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, stmt := range strings.Split(string(ddl), ";") {
-		if strings.TrimSpace(stripComments(stmt)) == "" {
-			continue
-		}
-		if _, err := db.Exec(stmt); err != nil {
-			t.Fatalf("original schema: %v", err)
-		}
-	}
-	for _, p := range products {
-		if _, err := db.Exec(`INSERT INTO Product (Name, Brand, Category) VALUES (?, ?, ?)`, p.name, p.brand, p.category); err != nil {
-			t.Fatal(err)
-		}
-	}
-	return path
-}
-
-func stripComments(s string) string {
-	var b strings.Builder
-	for _, line := range strings.Split(s, "\n") {
-		if !strings.HasPrefix(strings.TrimSpace(line), "--") {
-			b.WriteString(line + "\n")
-		}
-	}
-	return b.String()
-}
 
 func openStore(t *testing.T, path string) *Store {
 	t.Helper()
@@ -87,9 +43,9 @@ func startRun(t *testing.T, tx *Tx) int64 {
 func ptr[T any](v T) *T { return &v }
 
 func TestOpen_MigratesOriginalSchema(t *testing.T) {
-	path := newOriginalDB(t,
-		seedProduct{"Tablet iPad Pro 12.9\"", "Apple", "Tablets"},
-		seedProduct{"Cable Organizer Kit", nil, "Accessories"},
+	path := storetest.NewOriginalDB(t,
+		storetest.P("Tablet iPad Pro 12.9\"", "Apple", "Tablets"),
+		storetest.P("Cable Organizer Kit", nil, "Accessories"),
 	)
 	s := openStore(t, path)
 	ctx := context.Background()
@@ -133,7 +89,7 @@ func TestOpen_MigratesOriginalSchema(t *testing.T) {
 }
 
 func TestOpen_IsIdempotent(t *testing.T) {
-	path := newOriginalDB(t, seedProduct{"Xbox Series X", "Microsoft", "Gaming"})
+	path := storetest.NewOriginalDB(t, storetest.P("Xbox Series X", "Microsoft", "Gaming"))
 	openStore(t, path).Close()
 	s := openStore(t, path)
 	var n int
@@ -146,9 +102,9 @@ func TestOpen_IsIdempotent(t *testing.T) {
 }
 
 func TestOpen_RefusesCatalogWithDuplicateNormalizedKeys(t *testing.T) {
-	path := newOriginalDB(t,
-		seedProduct{"Xbox Series X", "Microsoft", "Gaming"},
-		seedProduct{"Xbox  Series X", "MICROSOFT", "Gaming"},
+	path := storetest.NewOriginalDB(t,
+		storetest.P("Xbox Series X", "Microsoft", "Gaming"),
+		storetest.P("Xbox  Series X", "MICROSOFT", "Gaming"),
 	)
 	if _, err := Open(context.Background(), path); err == nil {
 		t.Error("Open succeeded, want an error for duplicate products in the catalog")
@@ -156,7 +112,7 @@ func TestOpen_RefusesCatalogWithDuplicateNormalizedKeys(t *testing.T) {
 }
 
 func TestOpen_EnforcesForeignKeys(t *testing.T) {
-	s := openStore(t, newOriginalDB(t))
+	s := openStore(t, storetest.NewOriginalDB(t))
 	tx := begin(t, s)
 	now := time.Now()
 	runID := startRun(t, tx)
@@ -173,7 +129,7 @@ func TestTx_InsertProduct(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("stores_injection_payload_literally", func(t *testing.T) {
-		s := openStore(t, newOriginalDB(t, seedProduct{"Xbox Series X", "Microsoft", "Gaming"}))
+		s := openStore(t, storetest.NewOriginalDB(t, storetest.P("Xbox Series X", "Microsoft", "Gaming")))
 		tx := begin(t, s)
 		brand := "TestBrand'; SELECT 1; --"
 		id, err := tx.InsertProduct(ctx, Product{
@@ -196,7 +152,7 @@ func TestTx_InsertProduct(t *testing.T) {
 		}
 	})
 	t.Run("rejects_duplicate_normalized_key", func(t *testing.T) {
-		s := openStore(t, newOriginalDB(t, seedProduct{"Xbox Series X", "Microsoft", "Gaming"}))
+		s := openStore(t, storetest.NewOriginalDB(t, storetest.P("Xbox Series X", "Microsoft", "Gaming")))
 		tx := begin(t, s)
 		_, err := tx.InsertProduct(ctx, Product{
 			Name: "XBOX Series X", Brand: ptr("microsoft"),
@@ -209,10 +165,10 @@ func TestTx_InsertProduct(t *testing.T) {
 }
 
 func TestTx_ProductsByBrand_ReturnsOnlyThatBrand(t *testing.T) {
-	s := openStore(t, newOriginalDB(t,
-		seedProduct{"Router WiFi 6 TP-Link", "TP-Link", "Networking"},
-		seedProduct{"Smart Plug TP-Link 4-Pack", "TP-Link", "Smart Home"},
-		seedProduct{"Processor AMD Ryzen 9 7950X", "AMD", "Components"},
+	s := openStore(t, storetest.NewOriginalDB(t,
+		storetest.P("Router WiFi 6 TP-Link", "TP-Link", "Networking"),
+		storetest.P("Smart Plug TP-Link 4-Pack", "TP-Link", "Smart Home"),
+		storetest.P("Processor AMD Ryzen 9 7950X", "AMD", "Components"),
 	))
 	tx := begin(t, s)
 	got, err := tx.ProductsByBrand(context.Background(), "tp link")
@@ -236,9 +192,9 @@ func TestTx_Links(t *testing.T) {
 		}
 	}
 	setup := func(t *testing.T) (*Tx, int64) {
-		s := openStore(t, newOriginalDB(t,
-			seedProduct{"Xbox Series X", "Microsoft", "Gaming"},
-			seedProduct{"Nintendo Switch OLED", "Nintendo", "Gaming"},
+		s := openStore(t, storetest.NewOriginalDB(t,
+			storetest.P("Xbox Series X", "Microsoft", "Gaming"),
+			storetest.P("Nintendo Switch OLED", "Nintendo", "Gaming"),
 		))
 		tx := begin(t, s)
 		return tx, startRun(t, tx)
@@ -311,7 +267,7 @@ func TestTx_Links(t *testing.T) {
 }
 
 func TestTx_UpdateRun_StoresStatusAndCounters(t *testing.T) {
-	s := openStore(t, newOriginalDB(t))
+	s := openStore(t, storetest.NewOriginalDB(t))
 	tx := begin(t, s)
 	ctx := context.Background()
 	run := startRun(t, tx)
