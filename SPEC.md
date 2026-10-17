@@ -158,3 +158,31 @@ go run ./cmd/consolidate \
 - `Seller` table.
 - Per-line import log.
 - Allow-list and presence rules (e.g. "category X requires brand").
+
+## 9. Assumptions
+
+Made where the assessment is silent. Each one is a place where a different answer would change the design.
+
+1. **The current catalog is trusted.** Its 975 products are distinct (verified, also after normalization) and are the source of truth. Seller data never changes them.
+2. **The catalog language is English.** Seller names in other languages are translated towards it, never the other way round.
+3. **A product is identified by name and brand.** Category is classification and varies by seller.
+4. **A seller is identified by its name.** `SellerName` is free text and there is no seller registry; two spellings of the same seller would be two sellers.
+5. **The seller id is the seller's SKU**: opaque, unique only within that seller, and the key the seller will use for later updates.
+6. **Order in the file is meaningful**: when the same `(SellerName, Id)` appears more than once, the last occurrence is the most recent message.
+7. **A re-sent id with different data is a correction** by the seller, not a new item (decision 2).
+8. **The input fits in memory.** Needed by the whole-file distinct; acceptable for the sizes of this exercise.
+9. **One import runs at a time.** Concurrent runs would still not duplicate products (the `UNIQUE` on the normalized key), but their last-wins order would be undefined.
+10. **Wrongly merging is worse than duplicating** (section 1), so every doubtful case is reported, not decided.
+
+## 10. Questions I would ask
+
+Asked here because the assessment is asynchronous; the answers I assumed are in parentheses.
+
+1. When a seller's data differs from the catalog, which one wins, and should the catalog ever be updated? (The catalog wins; the seller's version is kept on the link.)
+2. Should uncertain matches go to a manual review queue, and who reviews them? (Reported as `possible_duplicate`; no queue yet.)
+3. Can a seller sell the same product under two SKUs? (Yes, with a warning.)
+4. Does a re-sent SKU with a different product mean a correction or a new item? (A correction: the link moves.)
+5. Which languages may sellers use, and is the catalog always in English? (Portuguese and English for now.)
+6. Is there a list of known sellers, or is `SellerName` all we get? (Only the name.)
+7. Which code conventions does the Guideline Document refer to? It defines none. (Standard Go conventions plus the ones in `AGENTS.md`.)
+8. Is the input always a single file per run, and how large can it get? (One file; batches of 500 keep transactions short.)
