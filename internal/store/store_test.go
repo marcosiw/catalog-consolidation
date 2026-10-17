@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/marcosiw/catalog-consolidation/internal/storetest"
+	"github.com/marcosiw/catalog-consolidation/internal/testutil"
 )
 
 func openStore(t *testing.T, path string) *Store {
@@ -43,9 +43,9 @@ func startRun(t *testing.T, tx *Tx) int64 {
 func ptr[T any](v T) *T { return &v }
 
 func TestOpen_MigratesOriginalSchema(t *testing.T) {
-	path := storetest.NewOriginalDB(t,
-		storetest.P("Tablet iPad Pro 12.9\"", "Apple", "Tablets"),
-		storetest.P("Cable Organizer Kit", nil, "Accessories"),
+	path := testutil.NewOriginalDB(t,
+		testutil.P("Tablet iPad Pro 12.9\"", "Apple", "Tablets"),
+		testutil.P("Cable Organizer Kit", nil, "Accessories"),
 	)
 	s := openStore(t, path)
 	ctx := context.Background()
@@ -89,7 +89,7 @@ func TestOpen_MigratesOriginalSchema(t *testing.T) {
 }
 
 func TestOpen_IsIdempotent(t *testing.T) {
-	path := storetest.NewOriginalDB(t, storetest.P("Xbox Series X", "Microsoft", "Gaming"))
+	path := testutil.NewOriginalDB(t, testutil.P("Xbox Series X", "Microsoft", "Gaming"))
 	openStore(t, path).Close()
 	s := openStore(t, path)
 	var n int
@@ -102,9 +102,9 @@ func TestOpen_IsIdempotent(t *testing.T) {
 }
 
 func TestOpen_RefusesCatalogWithDuplicateNormalizedKeys(t *testing.T) {
-	path := storetest.NewOriginalDB(t,
-		storetest.P("Xbox Series X", "Microsoft", "Gaming"),
-		storetest.P("Xbox  Series X", "MICROSOFT", "Gaming"),
+	path := testutil.NewOriginalDB(t,
+		testutil.P("Xbox Series X", "Microsoft", "Gaming"),
+		testutil.P("Xbox  Series X", "MICROSOFT", "Gaming"),
 	)
 	if _, err := Open(context.Background(), path); err == nil {
 		t.Error("Open succeeded, want an error for duplicate products in the catalog")
@@ -112,7 +112,7 @@ func TestOpen_RefusesCatalogWithDuplicateNormalizedKeys(t *testing.T) {
 }
 
 func TestOpen_EnforcesForeignKeys(t *testing.T) {
-	s := openStore(t, storetest.NewOriginalDB(t))
+	s := openStore(t, testutil.NewOriginalDB(t))
 	tx := begin(t, s)
 	now := time.Now()
 	runID := startRun(t, tx)
@@ -129,7 +129,7 @@ func TestTx_InsertProduct(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("stores_injection_payload_literally", func(t *testing.T) {
-		s := openStore(t, storetest.NewOriginalDB(t, storetest.P("Xbox Series X", "Microsoft", "Gaming")))
+		s := openStore(t, testutil.NewOriginalDB(t, testutil.P("Xbox Series X", "Microsoft", "Gaming")))
 		tx := begin(t, s)
 		brand := "TestBrand'; SELECT 1; --"
 		id, err := tx.InsertProduct(ctx, Product{
@@ -152,7 +152,7 @@ func TestTx_InsertProduct(t *testing.T) {
 		}
 	})
 	t.Run("rejects_duplicate_normalized_key", func(t *testing.T) {
-		s := openStore(t, storetest.NewOriginalDB(t, storetest.P("Xbox Series X", "Microsoft", "Gaming")))
+		s := openStore(t, testutil.NewOriginalDB(t, testutil.P("Xbox Series X", "Microsoft", "Gaming")))
 		tx := begin(t, s)
 		_, err := tx.InsertProduct(ctx, Product{
 			Name: "XBOX Series X", Brand: ptr("microsoft"),
@@ -165,10 +165,10 @@ func TestTx_InsertProduct(t *testing.T) {
 }
 
 func TestTx_ProductsByBrand_ReturnsOnlyThatBrand(t *testing.T) {
-	s := openStore(t, storetest.NewOriginalDB(t,
-		storetest.P("Router WiFi 6 TP-Link", "TP-Link", "Networking"),
-		storetest.P("Smart Plug TP-Link 4-Pack", "TP-Link", "Smart Home"),
-		storetest.P("Processor AMD Ryzen 9 7950X", "AMD", "Components"),
+	s := openStore(t, testutil.NewOriginalDB(t,
+		testutil.P("Router WiFi 6 TP-Link", "TP-Link", "Networking"),
+		testutil.P("Smart Plug TP-Link 4-Pack", "TP-Link", "Smart Home"),
+		testutil.P("Processor AMD Ryzen 9 7950X", "AMD", "Components"),
 	))
 	tx := begin(t, s)
 	got, err := tx.ProductsByBrand(context.Background(), "tp link")
@@ -192,9 +192,9 @@ func TestTx_Links(t *testing.T) {
 		}
 	}
 	setup := func(t *testing.T) (*Tx, int64) {
-		s := openStore(t, storetest.NewOriginalDB(t,
-			storetest.P("Xbox Series X", "Microsoft", "Gaming"),
-			storetest.P("Nintendo Switch OLED", "Nintendo", "Gaming"),
+		s := openStore(t, testutil.NewOriginalDB(t,
+			testutil.P("Xbox Series X", "Microsoft", "Gaming"),
+			testutil.P("Nintendo Switch OLED", "Nintendo", "Gaming"),
 		))
 		tx := begin(t, s)
 		return tx, startRun(t, tx)
@@ -267,7 +267,7 @@ func TestTx_Links(t *testing.T) {
 }
 
 func TestTx_UpdateRun_StoresStatusAndCounters(t *testing.T) {
-	s := openStore(t, storetest.NewOriginalDB(t))
+	s := openStore(t, testutil.NewOriginalDB(t))
 	tx := begin(t, s)
 	ctx := context.Background()
 	run := startRun(t, tx)

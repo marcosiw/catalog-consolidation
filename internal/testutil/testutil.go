@@ -1,6 +1,6 @@
-// Package storetest builds databases with the schema provided with the
+// Package testutil builds databases with the schema provided with the
 // assessment, so tests exercise the real migration path.
-package storetest
+package testutil
 
 import (
 	"database/sql"

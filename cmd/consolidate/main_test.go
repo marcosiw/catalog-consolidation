@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	"github.com/marcosiw/catalog-consolidation/internal/report"
-	"github.com/marcosiw/catalog-consolidation/internal/storetest"
+	"github.com/marcosiw/catalog-consolidation/internal/testutil"
 )
 
 // The integration tests run the command end to end on a versioned fixture:
@@ -26,9 +26,9 @@ type cli struct {
 func newCLI(t *testing.T) cli {
 	t.Helper()
 	return cli{
-		db: storetest.NewOriginalDB(t,
-			storetest.P("Xbox Series X", "Microsoft", "Gaming"),
-			storetest.P("PlayStation 5 Console", "Sony", "Gaming"),
+		db: testutil.NewOriginalDB(t,
+			testutil.P("Xbox Series X", "Microsoft", "Gaming"),
+			testutil.P("PlayStation 5 Console", "Sony", "Gaming"),
 		),
 		reports: t.TempDir(),
 	}

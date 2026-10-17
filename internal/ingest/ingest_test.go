@@ -11,19 +11,19 @@ import (
 	"github.com/marcosiw/catalog-consolidation/internal/report"
 	"github.com/marcosiw/catalog-consolidation/internal/rules"
 	"github.com/marcosiw/catalog-consolidation/internal/store"
-	"github.com/marcosiw/catalog-consolidation/internal/storetest"
+	"github.com/marcosiw/catalog-consolidation/internal/testutil"
 	"github.com/marcosiw/catalog-consolidation/internal/translate"
 )
 
 // catalog is the seed used by most tests. Ids follow the order: 1 to 7.
-var catalog = []storetest.Product{
-	storetest.P("Xbox Series X", "Microsoft", "Gaming"),
-	storetest.P("Camera Canon EOS R6", "Canon", "Photography"),
-	storetest.P("Router WiFi 6 TP-Link", "TP-Link", "Networking"),
-	storetest.P("Smart Plug TP-Link 4-Pack", "TP-Link", "Smart Home"),
-	storetest.P("Cable Organizer Kit", nil, "Accessories"),
-	storetest.P("Galaxy S24 Ultra Black", "Samsung", "Electronics"),
-	storetest.P("Belt Leather Reversible", "Levis", "Accessories"),
+var catalog = []testutil.Product{
+	testutil.P("Xbox Series X", "Microsoft", "Gaming"),
+	testutil.P("Camera Canon EOS R6", "Canon", "Photography"),
+	testutil.P("Router WiFi 6 TP-Link", "TP-Link", "Networking"),
+	testutil.P("Smart Plug TP-Link 4-Pack", "TP-Link", "Smart Home"),
+	testutil.P("Cable Organizer Kit", nil, "Accessories"),
+	testutil.P("Galaxy S24 Ultra Black", "Samsung", "Electronics"),
+	testutil.P("Belt Leather Reversible", "Levis", "Accessories"),
 }
 
 // in is an input entry; a nil field is omitted from the JSON.
@@ -52,9 +52,9 @@ type fixture struct {
 	db    *sql.DB // independent connection for assertions
 }
 
-func newFixture(t *testing.T, products ...storetest.Product) *fixture {
+func newFixture(t *testing.T, products ...testutil.Product) *fixture {
 	t.Helper()
-	path := storetest.NewOriginalDB(t, products...)
+	path := testutil.NewOriginalDB(t, products...)
 	s, err := store.Open(context.Background(), path)
 	if err != nil {
 		t.Fatal(err)
