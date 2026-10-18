@@ -34,17 +34,21 @@ func newCLI(t *testing.T) cli {
 	}
 }
 
-func (c cli) run(t *testing.T, extra ...string) (int, string, string) {
-	t.Helper()
-	args := append([]string{
+// args are the flags pointing at the fixture; later flags override earlier ones.
+func (c cli) args(extra ...string) []string {
+	return append([]string{
 		"-db", c.db,
 		"-input", filepath.Join("testdata", "entries.json"),
 		"-glossary", filepath.Join("..", "..", "config", "glossary-pt-en.json"),
 		"-exclusion-list", filepath.Join("..", "..", "config", "exclusion-list.json"),
 		"-report-dir", c.reports,
 	}, extra...)
+}
+
+func (c cli) run(t *testing.T, extra ...string) (int, string, string) {
+	t.Helper()
 	var stdout, stderr bytes.Buffer
-	code := run(context.Background(), args, &stdout, &stderr)
+	code := run(context.Background(), c.args(extra...), &stdout, &stderr)
 	return code, stdout.String(), stderr.String()
 }
 
@@ -149,5 +153,18 @@ func TestRun_RefusesMalformedInputWithoutReport(t *testing.T) {
 	}
 	if files, _ := filepath.Glob(filepath.Join(c.reports, "*.json")); len(files) != 0 {
 		t.Errorf("reports = %v, want none: nothing was written", files)
+	}
+}
+
+func TestRun_RecoversPanicWithInternalExitCode(t *testing.T) {
+	c := newCLI(t)
+	var stderr bytes.Buffer
+	// A nil stdout makes the summary panic after the import.
+	code := run(context.Background(), c.args(), nil, &stderr)
+	if code != exitInternal {
+		t.Errorf("exit = %d, want %d", code, exitInternal)
+	}
+	if !strings.Contains(stderr.String(), "internal error") || !strings.Contains(stderr.String(), "goroutine") {
+		t.Errorf("stderr does not show the error and its stack trace:\n%s", stderr.String())
 	}
 }
