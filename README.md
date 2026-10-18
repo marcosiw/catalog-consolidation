@@ -30,7 +30,7 @@ Each target is described in [`SPEC.md` section 6](SPEC.md#6-interface), together
 | duplicate_in_batch | 1 | `Câmera Canon EOS R6`, superseded by a later message of the same seller and id |
 | warnings | 11 | `same_product_multiple_ids`: a seller links the same product with two ids |
 
-A second run of the same file reports 267 `unchanged` and writes nothing. These numbers are pinned by a test that runs when the data is present.
+A second run of the same file reports 267 `unchanged` and writes nothing. Its warnings rise to 22 and stay there on later runs: the warning is raised per entry, and both entries of each pair now find the other one already linked, while in the first run only the later one does. These numbers are pinned by a test that runs when the data is present.
 
 ## How it works
 

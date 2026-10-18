@@ -180,4 +180,8 @@ func TestImporter_Run_ProvidedData(t *testing.T) {
 	if second.Counters != want {
 		t.Errorf("second run counters = %+v, want %+v", second.Counters, want)
 	}
+	// Both entries of each pair now find the other one already linked.
+	if n := second.WarningCounts()[report.WarningSameProductMultipleIDs]; n != 22 {
+		t.Errorf("second run same_product_multiple_ids warnings = %d, want 22", n)
+	}
 }
